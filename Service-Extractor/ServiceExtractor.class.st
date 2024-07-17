@@ -6,7 +6,6 @@ Class {
 	#superclass : #Object,
 	#instVars : [
 		'methodToExtract',
-		'slicedClasses',
 		'callGraph'
 	],
 	#category : #'Service-Extractor'
@@ -28,6 +27,35 @@ ServiceExtractor >> attributesUsedBy: aMethod [
 ]
 
 { #category : #extraction }
+ServiceExtractor >> collectDependenciesOf: aClass in: classDict [
+
+	aClass ifNil: [ ^ self ].
+	aClass isPrimitiveType ifTrue: [ ^ self ].
+	"Before checking if the parametric class is stub, we need to look at parameters."
+	aClass isParametricEntity ifTrue: [
+		aClass concreteParameters do: [ :cp |
+			self collectDependenciesOf: cp in: classDict ] ].
+
+	"If it is stub we just import."
+	aClass isStub ifTrue: [ ^ self ].
+	classDict at: aClass ifPresent: [ ^ self ].
+	classDict at: aClass ifAbsentPut: [ Set new ].
+
+	(aClass attributes collect: [ :a | a declaredType ]) do: [ :t |
+		self collectDependenciesOf: t in: classDict ].
+
+	(aClass methods collect: [ :m | m declaredType ]) do: [ :t |
+		self collectDependenciesOf: t in: classDict ].
+	(aClass methods flatCollect: [ :m |
+		 m parameters , m localVariables collect: [ :p | p declaredType ] ])
+		do: [ :t | self collectDependenciesOf: t in: classDict ].
+
+	(aClass methods flatCollect: [ :m |
+		 m outgoingReferences collect: [ :r | r referredType ] ]) do: [ :t |
+		self collectDependenciesOf: t in: classDict ]
+]
+
+{ #category : #extraction }
 ServiceExtractor >> dependenciesOf: aMethod [
 
 	| dependencies attributes |
@@ -45,30 +73,45 @@ ServiceExtractor >> dependenciesOf: aMethod [
 { #category : #extraction }
 ServiceExtractor >> extract [
 
-	| cgm |
-	slicedClasses := Dictionary new.
-
-	cgm := JavaCallGraphModel new
-		       entryMethod: self methodToExtract;
-		       yourself.
-	callGraph := cgm cha.
-
 	^ self extractFromCallGraph
+]
+
+{ #category : #extraction }
+ServiceExtractor >> extractCHA [
+
+	^ self extractFromCallGraphCHA
 ]
 
 { #category : #extraction }
 ServiceExtractor >> extractFromCallGraph [
 
-	| cgMethods classes |
+	| cgMethods classes cgm |
+	cgm := JavaCallGraphModel new
+		       entryMethod: self methodToExtract;
+		       yourself.
+	callGraph := self methodToExtract callGraph.
+
 	classes := Dictionary new.
 	cgMethods := Set with: methodToExtract.
 	cgMethods addAll:
 		(callGraph associations flatCollectAsSet: [ :a | a value ]).
 
 	cgMethods do: [ :m |
-		| class attributes |
+		| class attributes localVariables |
 		class := m parentType.
+		localVariables := m localVariables asOrderedCollection
+		                  , m parameters asOrderedCollection.
 		attributes := self attributesUsedBy: m.
+		localVariables , attributes asOrderedCollection do: [ :lv |
+			| lvType |
+			lvType := lv declaredType.
+			(lvType notNil and: [ lvType isStub not ]) ifTrue: [
+				classes at: lvType ifAbsentPut: [ Set new ] ].
+			(lvType notNil and: [ lvType isParametricEntity ]) ifTrue: [
+				lvType concreteParameters do: [ :cp |
+					cp isStub ifFalse: [ classes at: cp ifAbsentPut: [ Set new ] ] ] ] ].
+
+
 		classes
 			at: class
 			ifPresent: [ :entities | entities addAll: attributes ]
@@ -85,8 +128,9 @@ ServiceExtractor >> extractFromCallGraph [
 
 
 	classes keysDo: [ :c |
-		c methods do: [ :m |
-			m isConstructor ifTrue: [ (classes at: c) add: m ] ] ].
+		(classes at: c) ifNotEmpty: [
+			c methods do: [ :m |
+				m isConstructor ifTrue: [ (classes at: c) add: m ] ] ] ].
 
 	classes valuesDo: [ :v |
 		v do: [ :e |
@@ -95,6 +139,71 @@ ServiceExtractor >> extractFromCallGraph [
 				ifTrue: [ classes at: e declaredType ifAbsentPut: [ Set new ] ] ] ].
 
 	^ classes
+]
+
+{ #category : #extraction }
+ServiceExtractor >> extractFromCallGraphCHA [
+
+	| cgMethods classes cgm |
+	cgm := JavaCallGraphModel new
+		       entryMethod: self methodToExtract;
+		       yourself.
+	callGraph := cgm cha.
+
+	classes := Dictionary new.
+	cgMethods := Set with: methodToExtract.
+	cgMethods addAll:
+		(callGraph associations flatCollectAsSet: [ :a | a value ]).
+
+	cgMethods do: [ :m |
+		| class attributes localVariables |
+		class := m parentType.
+		localVariables := m localVariables asOrderedCollection
+		                  , m parameters asOrderedCollection.
+		attributes := self attributesUsedBy: m.
+		localVariables , attributes asOrderedCollection do: [ :lv |
+			| lvType |
+			lvType := lv declaredType.
+			self collectDependenciesOf: lvType in: classes ].
+
+
+		classes
+			at: class
+			ifPresent: [ :entities | entities addAll: attributes ]
+			ifAbsentPut: [ Set withAll: attributes ].
+		(classes at: class) add: m.
+		attributes do: [ :a |
+			a incomingAccesses do: [ :access |
+				(access isWrite and: [ access accessor name = '<Initializer>' ])
+					ifTrue: [ (classes at: class) add: access accessor ] ] ] ].
+
+	classes keysDo: [ :c |
+		(c superclassHierarchy reject: #isStub) do: [ :sc |
+			classes at: sc put: Set new ] ].
+
+
+	classes keysDo: [ :c |
+		(classes at: c) ifNotEmpty: [
+			c methods do: [ :m |
+				m isConstructor ifTrue: [ (classes at: c) add: m ] ] ] ].
+
+
+	classes valuesDo: [ :v |
+		v do: [ :e |
+			((e isAttribute or: [ e isMethod ]) and: [
+				 e declaredType isClass and: [ e declaredType isStub not ] ])
+				ifTrue: [ classes at: e declaredType ifAbsentPut: [ Set new ] ] ] ].
+
+
+
+	^ classes
+]
+
+{ #category : #extraction }
+ServiceExtractor >> extractMethod: aMethod [
+
+	self methodToExtract: aMethod.
+	^ self extract
 ]
 
 { #category : #accessing }

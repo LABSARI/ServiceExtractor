@@ -6,7 +6,8 @@ Class {
 		'classes',
 		'methods',
 		'typeGraph',
-		'entryMethod'
+		'entryMethod',
+		'nodesDict'
 	],
 	#category : #'Service-Extractor'
 }
@@ -14,7 +15,10 @@ Class {
 { #category : #initialization }
 JavaCallGraphModel >> addLinkFrom: m1 to: m2 [
 
-	callGraph 
+	methods
+		add: m1;
+		add: m2.
+	callGraph
 		at: m1
 		ifPresent: [ :list | list add: m2 ]
 		ifAbsentPut: [ Set with: m2 ]
@@ -23,22 +27,9 @@ JavaCallGraphModel >> addLinkFrom: m1 to: m2 [
 { #category : #accessing }
 JavaCallGraphModel >> buildNodeFor: v [
 
-	| label |
-	label := String streamContents: [ :s |
-		         | methodOrClass |
-		         methodOrClass := v parentBehaviouralEntity.
 
-		         methodOrClass isMethod ifTrue: [
-			         s
-				         nextPutAll: methodOrClass parentType name;
-				         nextPut: $. ].
-		         s
-			         nextPutAll: methodOrClass name;
-			         nextPut: $..
-		         s nextPutAll: v name ].
-
-	^ TypeGraphNode new
-		  label: label;
+	^ TypeGraphNode  new
+		  label: v callGraphLabel;
 		  famixEntity: v;
 		  yourself
 ]
@@ -47,14 +38,42 @@ JavaCallGraphModel >> buildNodeFor: v [
 JavaCallGraphModel >> buildtypeGraph [
 
 	typeGraph := Dictionary new.
-	methods do: [ :m |
-		m parameters do: [ :p |
-			p hasObjectType ifTrue: [
-				typeGraph at: (self buildNodeFor: p) put: OrderedCollection new ] ].
+	nodesDict := Dictionary new.
+	"Create nodes for the type graph."
+	classes do: [ :c |
+		c attributes do: [ :a |
+			a hasObjectType ifTrue: [ nodesDict at: a callGraphLabel put: a ] ] ].
 
-		m localVariables do: [ :v |
-			v hasObjectType ifTrue: [
-				typeGraph at: (self buildNodeFor: v) put: OrderedCollection new ] ] ]
+	methods do: [ :m |
+		m parameters , m localVariables , m implicitVariables do: [ :p |
+			p hasObjectType ifTrue: [ nodesDict at: p callGraphLabel put: p ] ].
+
+		m hasReturnObjectType ifTrue: [
+			nodesDict at: m returnCallGraphLabel put: m declaredType ] ].
+	"Add egdes to the type graph."
+	methods do: [ :m |
+		| ast |
+		ast := (JavaSmaCCProgramNodeImporterVisitor new
+			        parseCodeMethodString: m sourceText)
+			       allFASTJavaMethodEntity first.
+		"Assignment statements: a = b or a = (C) b"
+		((ast allToScope: FASTJavaAssignementExpression)
+		 , (ast allToScope: FASTJavaVariableDeclarator) select: [ :a |
+			 a expression class = FASTJavaVariableExpression or: [
+				 a expression class = FASTJavaCastExpression and: [
+					 a expression expression class = FASTJavaVariableExpression ] ] ])
+			do: [ :fa |
+				| var expVar famixVar famixExpVar |
+				var := fa variable.
+				expVar := fa expression.
+				expVar class = FASTJavaCastExpression ifTrue: [
+					expVar := expVar expression ].
+				famixVar := self findFamixVariable: var from: m.
+				famixExpVar := self findFamixVariable: expVar from: m.
+				typeGraph
+					at: famixExpVar
+					ifPresent: [ :c | c add: famixVar ]
+					ifAbsentPut: [ OrderedCollection with: famixVar ] ] ]. 
 ]
 
 { #category : #accessing }
@@ -111,15 +130,18 @@ JavaCallGraphModel >> cha [
 		calls := workMethod queryOutgoing: FamixTInvocation.
 		calls do: [ :call |
 			| method overridingMethods |
-			call candidates ifNotEmpty: 
-			[method := call candidates first.
+			call candidates ifNotEmpty: [
+				method := call candidates first.
+				method isStub ifFalse: [
+					overridingMethods := OrderedCollection new.
+					method numberOfStatements > 0 ifTrue: [
+						overridingMethods add: method ].
+					overridingMethods addAll: method overridingMethods.
 
-			method isStub ifFalse: [
-				overridingMethods := OrderedCollection with: method.
-				overridingMethods addAll: method overridingMethods.
-				overridingMethods do: [ :oMeth |
-					self addLinkFrom: workMethod to: oMeth.
-					(callGraph includesKey: oMeth) ifFalse: [ worklist add: oMeth ] ] ]] ] ].
+					overridingMethods do: [ :oMeth |
+						self addLinkFrom: workMethod to: oMeth.
+						(callGraph includesKey: oMeth) ifFalse: [ worklist add: oMeth ] ] ] ] ] ].
+	classes := methods collectAsSet: [ :m | m parentType ].
 	^ callGraph
 ]
 
@@ -133,6 +155,59 @@ JavaCallGraphModel >> entryMethod [
 JavaCallGraphModel >> entryMethod: anObject [
 
 	entryMethod := anObject
+]
+
+{ #category : #'private utils' }
+JavaCallGraphModel >> findFamixType: aFASTExpression from: aFamixJavaMethod [
+
+	aFASTExpression class = FASTJavaFieldAccess ifTrue: [
+		aFASTExpression receiver class = FASTJavaVariableExpression ifTrue: [
+			^ self
+				  findFamixType: aFASTExpression receiver
+				  from: aFamixJavaMethod ].
+		^ self findFamixType: aFASTExpression from: aFamixJavaMethod ].
+	
+	aFASTExpression class = FASTJavaVariableExpression ifTrue: [
+		| var |
+		var := self
+			       findFamixVariable: aFASTExpression
+			       from: aFamixJavaMethod.
+		^ var isImplicitVariable
+			  ifTrue: [ var parentBehaviouralEntity parentType ]
+			  ifFalse: [ var declaredType ] ].
+	AssertionFailure signal:
+		'Could not handle: ' , aFASTExpression class asString
+]
+
+{ #category : #'private utils' }
+JavaCallGraphModel >> findFamixVariable: aFASTNode from: aFamixJavaMethod [
+
+	(aFASTNode class = FASTJavaClassProperty and: [ aFASTNode type name first isLowercase   ])ifTrue: [
+		| type |
+		type := self
+			        findFamixType: aFASTNode type
+			        from: aFamixJavaMethod.
+		^ type attributes detect: [ :a | a name = aFASTNode fieldName ] ].
+	
+	aFASTNode class = FASTJavaFieldAccess ifTrue: [
+		| type |
+		type := self
+			        findFamixType: aFASTNode receiver
+			        from: aFamixJavaMethod.
+		^ type attributes detect: [ :a | a name = aFASTNode fieldName ] ].
+
+	aFASTNode class = FASTJavaVariableExpression ifTrue: [
+		^ aFamixJavaMethod localVariables , aFamixJavaMethod parameters
+		  , aFamixJavaMethod implicitVariables
+			  detect: [ :lv |
+				  lv name = aFASTNode name or: [
+					  lv isImplicitVariable and: [
+						  lv name = 'self' and: [ aFASTNode name = 'this' ] ] ] ]
+			  ifNone: [
+				  aFamixJavaMethod parentType attributes detect: [ :a |
+					  a name = aFASTNode name ] ] ].
+	AssertionFailure signal:
+		'Could not handle: ' , aFASTNode class asString
 ]
 
 { #category : #initialization }

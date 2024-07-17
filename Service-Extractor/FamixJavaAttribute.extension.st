@@ -1,11 +1,11 @@
-Extension { #name : #FamixJavaLocalVariable }
+Extension { #name : #FamixJavaAttribute }
 
 { #category : #'*Service-Extractor' }
-FamixJavaLocalVariable >> callGraphLabel [
+FamixJavaAttribute >> callGraphLabel [
 
 	^ String streamContents: [ :s |
 		  | type |
-		  type := self parentBehaviouralEntity.
+		  type := self parentType.
 		  s
 			  nextPutAll: type mooseNameWithDots;
 			  nextPut: $.;
@@ -13,8 +13,7 @@ FamixJavaLocalVariable >> callGraphLabel [
 ]
 
 { #category : #'*Service-Extractor' }
-FamixJavaLocalVariable >> hasObjectType [
-	
+FamixJavaAttribute >> hasObjectType [
 	
 	^ self declaredType isNotNil and: [self declaredType isPrimitiveType not]
 ]
