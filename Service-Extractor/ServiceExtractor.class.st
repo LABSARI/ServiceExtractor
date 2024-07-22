@@ -6,10 +6,27 @@ Class {
 	#superclass : #Object,
 	#instVars : [
 		'methodToExtract',
-		'callGraph'
+		'callGraph',
+		'classes'
 	],
 	#category : #'Service-Extractor'
 }
+
+{ #category : #extraction }
+ServiceExtractor class >> extractMethod: aMethod [
+
+	| slicedClasses |
+	slicedClasses := self new
+		                 extractMethod: aMethod;
+		                 extractCHA;
+		                 createModel
+	"FAMIX2JavaVisitor new
+		slicedClasses: slicedClasses;
+		rootFolder:
+			('/Users/slabsar/Documents/xpworkspace/exported/' , aMethod name)
+				asFileReference;
+		export: aMethod mooseModel"
+]
 
 { #category : #extraction }
 ServiceExtractor >> attributesUsedBy: aMethod [
@@ -53,6 +70,33 @@ ServiceExtractor >> collectDependenciesOf: aClass in: classDict [
 	(aClass methods flatCollect: [ :m |
 		 m outgoingReferences collect: [ :r | r referredType ] ]) do: [ :t |
 		self collectDependenciesOf: t in: classDict ]
+]
+
+{ #category : #extraction }
+ServiceExtractor >> createModel [
+
+	| subModel packages |
+	self
+		assert: classes notNil
+		description:
+		'classes should be computed before executing this method'.
+	packages := Set new.
+	subModel := FamixJavaModel named: methodToExtract name , 'Model'.
+
+	classes associationsDo: [ :assoc |
+		| type newType elements |
+		type := assoc key.
+		elements := assoc value.
+		newType := type copy.
+		subModel add: newType.
+		packages addAll: (newType allAtScope: FamixJavaPackage).
+		newType ].
+	packages do: [ :p |
+		| newPackage |
+		newPackage := p copy.
+		newPackage types:
+			(newPackage types copy select: [ :t | classes includes: t ]).
+		subModel add: newPackage ]
 ]
 
 { #category : #extraction }
