@@ -1,6 +1,6 @@
-Extension { #name : #FamixJavaLocalVariable }
+Extension { #name : 'FamixJavaLocalVariable' }
 
-{ #category : #'*Service-Extractor' }
+{ #category : '*Service-Extractor' }
 FamixJavaLocalVariable >> callGraphLabel [
 
 	^ String streamContents: [ :s |
@@ -12,7 +12,7 @@ FamixJavaLocalVariable >> callGraphLabel [
 			  nextPutAll: self name ]
 ]
 
-{ #category : #'*Service-Extractor' }
+{ #category : '*Service-Extractor' }
 FamixJavaLocalVariable >> hasObjectType [
 	
 	

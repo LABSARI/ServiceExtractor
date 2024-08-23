@@ -1,6 +1,6 @@
-Extension { #name : #FamixJavaImplicitVariable }
+Extension { #name : 'FamixJavaImplicitVariable' }
 
-{ #category : #'*Service-Extractor' }
+{ #category : '*Service-Extractor' }
 FamixJavaImplicitVariable >> callGraphLabel [
 
 	^ String streamContents: [ :s |

@@ -1,32 +1,33 @@
 Class {
-	#name : #TypeGraphNode,
-	#superclass : #Object,
+	#name : 'TypeGraphNode',
+	#superclass : 'Object',
 	#instVars : [
 		'label',
 		'famixEntity'
 	],
-	#category : #'Service-Extractor'
+	#category : 'Service-Extractor',
+	#package : 'Service-Extractor'
 }
 
-{ #category : #accessing }
+{ #category : 'accessing' }
 TypeGraphNode >> famixEntity [
 
 	^ famixEntity
 ]
 
-{ #category : #accessing }
+{ #category : 'accessing' }
 TypeGraphNode >> famixEntity: anObject [
 
 	famixEntity := anObject
 ]
 
-{ #category : #accessing }
+{ #category : 'accessing' }
 TypeGraphNode >> label [
 
 	^ label
 ]
 
-{ #category : #accessing }
+{ #category : 'accessing' }
 TypeGraphNode >> label: anObject [
 
 	label := anObject

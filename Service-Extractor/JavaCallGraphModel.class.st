@@ -1,6 +1,6 @@
 Class {
-	#name : #JavaCallGraphModel,
-	#superclass : #Object,
+	#name : 'JavaCallGraphModel',
+	#superclass : 'Object',
 	#instVars : [
 		'callGraph',
 		'classes',
@@ -9,10 +9,11 @@ Class {
 		'entryMethod',
 		'nodesDict'
 	],
-	#category : #'Service-Extractor'
+	#category : 'Service-Extractor',
+	#package : 'Service-Extractor'
 }
 
-{ #category : #initialization }
+{ #category : 'initialization' }
 JavaCallGraphModel >> addLinkFrom: m1 to: m2 [
 
 	methods
@@ -24,7 +25,7 @@ JavaCallGraphModel >> addLinkFrom: m1 to: m2 [
 		ifAbsentPut: [ Set with: m2 ]
 ]
 
-{ #category : #accessing }
+{ #category : 'accessing' }
 JavaCallGraphModel >> buildNodeFor: v [
 
 
@@ -34,7 +35,7 @@ JavaCallGraphModel >> buildNodeFor: v [
 		  yourself
 ]
 
-{ #category : #accessing }
+{ #category : 'accessing' }
 JavaCallGraphModel >> buildtypeGraph [
 
 	typeGraph := Dictionary new.
@@ -76,7 +77,7 @@ JavaCallGraphModel >> buildtypeGraph [
 					ifAbsentPut: [ OrderedCollection with: famixVar ] ] ]. 
 ]
 
-{ #category : #accessing }
+{ #category : 'accessing' }
 JavaCallGraphModel >> callGraph [
 
 	^ callGraph ifNil: [
@@ -89,7 +90,7 @@ JavaCallGraphModel >> callGraph [
 		  callGraph := dict ]
 ]
 
-{ #category : #computing }
+{ #category : 'computing' }
 JavaCallGraphModel >> callGraph: dict depth: depth method: aMethod [
 
 	| providers newDepth methodsToExplore |
@@ -113,7 +114,7 @@ JavaCallGraphModel >> callGraph: dict depth: depth method: aMethod [
 	^ dict
 ]
 
-{ #category : #initialization }
+{ #category : 'initialization' }
 JavaCallGraphModel >> cha [
 
 	| worklist |
@@ -145,19 +146,19 @@ JavaCallGraphModel >> cha [
 	^ callGraph
 ]
 
-{ #category : #accessing }
+{ #category : 'accessing' }
 JavaCallGraphModel >> entryMethod [
 
 	^ entryMethod
 ]
 
-{ #category : #accessing }
+{ #category : 'accessing' }
 JavaCallGraphModel >> entryMethod: anObject [
 
 	entryMethod := anObject
 ]
 
-{ #category : #'private utils' }
+{ #category : 'private utils' }
 JavaCallGraphModel >> findFamixType: aFASTExpression from: aFamixJavaMethod [
 
 	aFASTExpression class = FASTJavaFieldAccess ifTrue: [
@@ -179,7 +180,7 @@ JavaCallGraphModel >> findFamixType: aFASTExpression from: aFamixJavaMethod [
 		'Could not handle: ' , aFASTExpression class asString
 ]
 
-{ #category : #'private utils' }
+{ #category : 'private utils' }
 JavaCallGraphModel >> findFamixVariable: aFASTNode from: aFamixJavaMethod [
 
 	(aFASTNode class = FASTJavaClassProperty and: [ aFASTNode type name first isLowercase   ])ifTrue: [
@@ -210,7 +211,7 @@ JavaCallGraphModel >> findFamixVariable: aFASTNode from: aFamixJavaMethod [
 		'Could not handle: ' , aFASTNode class asString
 ]
 
-{ #category : #initialization }
+{ #category : 'initialization' }
 JavaCallGraphModel >> initialize [
 
 	classes := Set new.

@@ -2,17 +2,18 @@
 A service extrator. It takes a famix method and give all (available at static time) entities needed to execute that service.
 "
 Class {
-	#name : #ServiceExtractor,
-	#superclass : #Object,
+	#name : 'ServiceExtractor',
+	#superclass : 'Object',
 	#instVars : [
 		'methodToExtract',
 		'callGraph',
 		'classes'
 	],
-	#category : #'Service-Extractor'
+	#category : 'Service-Extractor',
+	#package : 'Service-Extractor'
 }
 
-{ #category : #extraction }
+{ #category : 'extraction' }
 ServiceExtractor class >> extractMethod: aMethod [
 
 	| slicedClasses |
@@ -28,14 +29,15 @@ ServiceExtractor class >> extractMethod: aMethod [
 		export: aMethod mooseModel"
 ]
 
-{ #category : #extraction }
+{ #category : 'extraction' }
 ServiceExtractor >> attributesUsedBy: aMethod [
 
 	| dependencies attributes |
 	dependencies := Set new.
 	attributes := (aMethod accesses
 		               collect: #variable
-		               thenSelect: [ :var | var isAttribute ]) asSet.
+		               thenSelect: [ :var |
+		               var isStub not and: [ var isAttribute ] ]) asSet.
 	"attributes do: [ :att |
 		dependencies add: att.
 		att incomingAccesses do: [ :access |
@@ -43,7 +45,7 @@ ServiceExtractor >> attributesUsedBy: aMethod [
 	^ attributes
 ]
 
-{ #category : #extraction }
+{ #category : 'extraction' }
 ServiceExtractor >> collectDependenciesOf: aClass in: classDict [
 
 	aClass ifNil: [ ^ self ].
@@ -58,21 +60,21 @@ ServiceExtractor >> collectDependenciesOf: aClass in: classDict [
 	classDict at: aClass ifPresent: [ ^ self ].
 	classDict at: aClass ifAbsentPut: [ Set new ].
 
-	(aClass attributes collect: [ :a | a declaredType ]) do: [ :t |
-		self collectDependenciesOf: t in: classDict ].
+	"(aClass attributes collect: [ :a | a declaredType ]) do: [ :t |
+		self collectDependenciesOf: t in: classDict ]."
 
-	(aClass methods collect: [ :m | m declaredType ]) do: [ :t |
-		self collectDependenciesOf: t in: classDict ].
-	(aClass methods flatCollect: [ :m |
+	"(aClass methods collect: [ :m | m declaredType ]) do: [ :t |
+		self collectDependenciesOf: t in: classDict ]."
+	"(aClass methods flatCollect: [ :m |
 		 m parameters , m localVariables collect: [ :p | p declaredType ] ])
-		do: [ :t | self collectDependenciesOf: t in: classDict ].
+		do: [ :t | self collectDependenciesOf: t in: classDict ]."
 
-	(aClass methods flatCollect: [ :m |
+	"(aClass methods flatCollect: [ :m |
 		 m outgoingReferences collect: [ :r | r referredType ] ]) do: [ :t |
-		self collectDependenciesOf: t in: classDict ]
+		self collectDependenciesOf: t in: classDict ]"
 ]
 
-{ #category : #extraction }
+{ #category : 'extraction' }
 ServiceExtractor >> createModel [
 
 	| subModel packages |
@@ -99,7 +101,7 @@ ServiceExtractor >> createModel [
 		subModel add: newPackage ]
 ]
 
-{ #category : #extraction }
+{ #category : 'extraction' }
 ServiceExtractor >> dependenciesOf: aMethod [
 
 	| dependencies attributes |
@@ -114,19 +116,25 @@ ServiceExtractor >> dependenciesOf: aMethod [
 	^ attributes
 ]
 
-{ #category : #extraction }
+{ #category : 'extraction' }
 ServiceExtractor >> extract [
 
 	^ self extractFromCallGraph
 ]
 
-{ #category : #extraction }
+{ #category : 'extraction' }
 ServiceExtractor >> extractCHA [
 
 	^ self extractFromCallGraphCHA
 ]
 
-{ #category : #extraction }
+{ #category : 'extraction' }
+ServiceExtractor >> extractConfigurationFiles [
+
+	
+]
+
+{ #category : 'extraction' }
 ServiceExtractor >> extractFromCallGraph [
 
 	| cgMethods classes cgm |
@@ -185,10 +193,10 @@ ServiceExtractor >> extractFromCallGraph [
 	^ classes
 ]
 
-{ #category : #extraction }
+{ #category : 'extraction' }
 ServiceExtractor >> extractFromCallGraphCHA [
 
-	| cgMethods classes cgm |
+	| cgMethods cgm |
 	cgm := JavaCallGraphModel new
 		       entryMethod: self methodToExtract;
 		       yourself.
@@ -207,9 +215,19 @@ ServiceExtractor >> extractFromCallGraphCHA [
 		attributes := self attributesUsedBy: m.
 		localVariables , attributes asOrderedCollection do: [ :lv |
 			| lvType |
+			(lv isAttribute and: [ lv parentType ~= class ]) ifTrue: [
+				classes
+					at: lv parentType
+					ifPresent: [ :entities | entities add: lv ]
+					ifAbsentPut: [ Set with: lv ] ].
 			lvType := lv declaredType.
 			self collectDependenciesOf: lvType in: classes ].
 
+		m overriddenMethod ifNotNil: [
+			classes
+				at: m overriddenMethod parentType
+				ifPresent: [ :entities | entities add: m overriddenMethod ]
+				ifAbsentPut: [ Set with: m overriddenMethod ] ].
 
 		classes
 			at: class
@@ -221,9 +239,7 @@ ServiceExtractor >> extractFromCallGraphCHA [
 				(access isWrite and: [ access accessor name = '<Initializer>' ])
 					ifTrue: [ (classes at: class) add: access accessor ] ] ] ].
 
-	classes keysDo: [ :c |
-		(c superclassHierarchy reject: #isStub) do: [ :sc |
-			classes at: sc put: Set new ] ].
+
 
 
 	classes keysDo: [ :c |
@@ -238,25 +254,28 @@ ServiceExtractor >> extractFromCallGraphCHA [
 				 e declaredType isClass and: [ e declaredType isStub not ] ])
 				ifTrue: [ classes at: e declaredType ifAbsentPut: [ Set new ] ] ] ].
 
+	classes keysDo: [ :c |
+		(c superclassHierarchy reject: #isStub) do: [ :sc |
+			classes at: sc put: Set new ] ].
 
 
 	^ classes
 ]
 
-{ #category : #extraction }
+{ #category : 'extraction' }
 ServiceExtractor >> extractMethod: aMethod [
 
 	self methodToExtract: aMethod.
-	^ self extract
+	^ self extractCHA
 ]
 
-{ #category : #accessing }
+{ #category : 'accessing' }
 ServiceExtractor >> methodToExtract [
 
 	^ methodToExtract
 ]
 
-{ #category : #accessing }
+{ #category : 'accessing' }
 ServiceExtractor >> methodToExtract: anObject [
 
 	methodToExtract := anObject

@@ -1,6 +1,6 @@
-Extension { #name : #FamixJavaAttribute }
+Extension { #name : 'FamixJavaAttribute' }
 
-{ #category : #'*Service-Extractor' }
+{ #category : '*Service-Extractor' }
 FamixJavaAttribute >> callGraphLabel [
 
 	^ String streamContents: [ :s |
@@ -12,7 +12,7 @@ FamixJavaAttribute >> callGraphLabel [
 			  nextPutAll: self name ]
 ]
 
-{ #category : #'*Service-Extractor' }
+{ #category : '*Service-Extractor' }
 FamixJavaAttribute >> hasObjectType [
 	
 	^ self declaredType isNotNil and: [self declaredType isPrimitiveType not]
