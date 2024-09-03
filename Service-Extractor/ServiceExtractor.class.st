@@ -16,17 +16,9 @@ Class {
 { #category : 'extraction' }
 ServiceExtractor class >> extractMethod: aMethod [
 
-	| slicedClasses |
-	slicedClasses := self new
-		                 extractMethod: aMethod;
-		                 extractCHA;
-		                 createModel
-	"FAMIX2JavaVisitor new
-		slicedClasses: slicedClasses;
-		rootFolder:
-			('/Users/slabsar/Documents/xpworkspace/exported/' , aMethod name)
-				asFileReference;
-		export: aMethod mooseModel"
+	^ self new
+		  extractMethod: aMethod;
+		  extractCHA
 ]
 
 { #category : 'extraction' }
@@ -131,6 +123,12 @@ ServiceExtractor >> extractCHA [
 { #category : 'extraction' }
 ServiceExtractor >> extractConfigurationFiles [
 
+	| javaSprintDetector |
+	javaSprintDetector := AdonisSpring new.
+	javaSprintDetector mainModel: methodToExtract mooseModel.
+	javaSprintDetector detectAllLinks.
+	
+	
 	
 ]
 
