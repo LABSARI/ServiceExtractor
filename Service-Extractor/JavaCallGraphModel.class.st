@@ -7,7 +7,8 @@ Class {
 		'methods',
 		'typeGraph',
 		'entryMethod',
-		'nodesDict'
+		'nodesDict',
+		'stubMethods'
 	],
 	#category : 'Service-Extractor',
 	#package : 'Service-Extractor'
@@ -119,7 +120,7 @@ JavaCallGraphModel >> cha [
 
 	| worklist |
 	callGraph := Dictionary new.
-
+	stubMethods := OrderedCollection new.
 	worklist := LinkedList new.
 
 	worklist add: entryMethod.
@@ -133,15 +134,15 @@ JavaCallGraphModel >> cha [
 			| method overridingMethods |
 			call candidates ifNotEmpty: [
 				method := call candidates first.
-				method isStub ifFalse: [
-					overridingMethods := OrderedCollection new.
-					method numberOfStatements > 0 ifTrue: [
-						overridingMethods add: method ].
-					overridingMethods addAll: method overridingMethods.
 
-					overridingMethods do: [ :oMeth |
-						self addLinkFrom: workMethod to: oMeth.
-						(callGraph includesKey: oMeth) ifFalse: [ worklist add: oMeth ] ] ] ] ] ].
+				overridingMethods := OrderedCollection new.
+				(method isStub not and: [ method numberOfStatements > 0 ])
+					ifTrue: [ overridingMethods add: method ].
+				overridingMethods addAll: (method overridingMethods reject: #isStub).
+				method isStub ifTrue: [ stubMethods add: call ].
+				overridingMethods do: [ :oMeth |
+					self addLinkFrom: workMethod to: oMeth.
+					(callGraph includesKey: oMeth) ifFalse: [ worklist add: oMeth ] ] ] ] ].
 	classes := methods collectAsSet: [ :m | m parentType ].
 	^ callGraph
 ]
@@ -216,4 +217,16 @@ JavaCallGraphModel >> initialize [
 
 	classes := Set new.
 	methods := Set new
+]
+
+{ #category : 'accessing' }
+JavaCallGraphModel >> stubMethods [
+
+	^ stubMethods
+]
+
+{ #category : 'accessing' }
+JavaCallGraphModel >> stubMethods: anObject [
+
+	stubMethods := anObject
 ]

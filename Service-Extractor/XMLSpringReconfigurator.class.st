@@ -6,7 +6,10 @@ Class {
 		'xmlReferences',
 		'xmlDocuments',
 		'classDict',
-		'refDict'
+		'refDict',
+		'javaSprintDetector',
+		'mooseModel',
+		'tBeans'
 	],
 	#category : 'Service-Extractor',
 	#package : 'Service-Extractor'
@@ -36,17 +39,60 @@ XMLSpringReconfigurator >> collectBeans [
 { #category : 'visiting' }
 XMLSpringReconfigurator >> deleteBeanIfUnused: aBean [
 
-	| id class |
-	id := aBean attributes detect: [ :a | a name = 'id' ].
-	class := aBean attributes detect: [ :a | a name = 'class' ].
-	
-	
+	| id class aLink classPath |
+	id := aBean attributeAt: 'id'.
+	classPath := aBean attributeAt: 'class'.
+
+	aLink := javaSprintDetector detectedLinks
+		         detect: [ :al | al referenceEntity elementName = classPath ]
+		         ifNone: [
+			         refDict at: id put: nil.
+			         ^ self ].
+	class := aLink resourceEntity element.
+	refDict at: id put: class.
+
+	(classDict includesKey: class) ifFalse: [
+		aBean removeFromParent.
+		 ] ifTrue: [ 
+		tBeans add: aBean
+		 ]
 ]
 
 { #category : 'visiting' }
 XMLSpringReconfigurator >> deleteUnusedBeans [
 
 	beans do: [ :bean | self deleteBeanIfUnused: bean ]
+]
+
+{ #category : 'processing' }
+XMLSpringReconfigurator >> detectAllLinks [
+
+	| links files |
+	javaSprintDetector := AdonisSpring new.
+	javaSprintDetector mainModel: mooseModel.
+	javaSprintDetector detectAllLinks.
+
+	links := javaSprintDetector detectedLinks.
+	files := links collectAsSet: [ :al | al referenceEntity path ].
+	xmlReferences := (files collect: [ :f | f asFileReference ])
+		                 asOrderedCollection
+]
+
+{ #category : 'visiting' }
+XMLSpringReconfigurator >> exportFiles [
+	
+	refDict := Dictionary new.
+	tBeans := OrderedCollection new.
+	self detectAllLinks.
+	self collectBeans.
+	self deleteUnusedBeans.
+	1halt.
+]
+
+{ #category : 'accessing' }
+XMLSpringReconfigurator >> mooseModel: anObject [
+
+	mooseModel := anObject
 ]
 
 { #category : 'visiting' }

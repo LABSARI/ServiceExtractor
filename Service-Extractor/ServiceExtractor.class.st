@@ -123,10 +123,11 @@ ServiceExtractor >> extractCHA [
 { #category : 'extraction' }
 ServiceExtractor >> extractConfigurationFiles [
 
-	| javaSprintDetector |
-	javaSprintDetector := AdonisSpring new.
-	javaSprintDetector mainModel: methodToExtract mooseModel.
-	javaSprintDetector detectAllLinks.
+	| rec |
+	rec := XMLSpringReconfigurator new.
+	rec classDict: classes.
+	rec mooseModel: methodToExtract mooseModel.
+	rec exportFiles
 	
 	
 	
@@ -135,7 +136,7 @@ ServiceExtractor >> extractConfigurationFiles [
 { #category : 'extraction' }
 ServiceExtractor >> extractFromCallGraph [
 
-	| cgMethods classes cgm |
+	| cgMethods  cgm |
 	cgm := JavaCallGraphModel new
 		       entryMethod: self methodToExtract;
 		       yourself.
@@ -237,14 +238,16 @@ ServiceExtractor >> extractFromCallGraphCHA [
 				(access isWrite and: [ access accessor name = '<Initializer>' ])
 					ifTrue: [ (classes at: class) add: access accessor ] ] ] ].
 
-
-
+	
+	cgm stubMethods do: [ :sm |
+		sm receiver declaredType allSubclassesAndImplementations do: [ :ci |
+			classes at: ci ifAbsentPut: Set new ] ].
 
 	classes keysDo: [ :c |
 		(classes at: c) ifNotEmpty: [
 			c methods do: [ :m |
 				m isConstructor ifTrue: [ (classes at: c) add: m ] ] ] ].
-
+	
 
 	classes valuesDo: [ :v |
 		v do: [ :e |
@@ -254,8 +257,8 @@ ServiceExtractor >> extractFromCallGraphCHA [
 
 	classes keysDo: [ :c |
 		(c superclassHierarchy reject: #isStub) do: [ :sc |
-			classes at: sc put: Set new ] ].
-
+			classes at: sc ifAbsentPut: Set new ] ].
+	
 
 	^ classes
 ]
