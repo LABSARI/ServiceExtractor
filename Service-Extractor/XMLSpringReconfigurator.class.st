@@ -9,7 +9,8 @@ Class {
 		'refDict',
 		'javaSprintDetector',
 		'mooseModel',
-		'tBeans'
+		'tBeans',
+		'xmlDocumentsPath'
 	],
 	#category : 'Service-Extractor',
 	#package : 'Service-Extractor'
@@ -31,8 +32,13 @@ XMLSpringReconfigurator >> classDict: anObject [
 XMLSpringReconfigurator >> collectBeans [
 
 	beans := OrderedCollection new.
-	xmlDocuments := xmlReferences collect: [ :xr |
-		                XMLDOMParser parse: xr ].
+	xmlDocuments := OrderedCollection new.
+	xmlDocumentsPath := OrderedCollection new.
+	xmlReferences do: [ :xr |
+		| doc |
+		doc := XMLDOMParser parse: xr.
+		xmlDocuments add: doc.
+		xmlDocumentsPath add: xr basename -> doc ].
 	xmlDocuments do: [ :doc | doc acceptNodeVisitor: self ]
 ]
 
@@ -56,6 +62,20 @@ XMLSpringReconfigurator >> deleteBeanIfUnused: aBean [
 		 ] ifTrue: [ 
 		tBeans add: aBean
 		 ]
+]
+
+{ #category : 'visiting' }
+XMLSpringReconfigurator >> deleteDeadReferences [
+
+	tBeans do: [ :b |
+		(b nodes select: #isElement) do: [ :p |
+			| att |
+			att := p attributeAt: 'ref'.
+			refDict
+				at: att
+				ifPresent: [ :class |
+				classDict at: class ifAbsent: [ p removeFromParent ] ]
+				ifAbsent: [ "let it like that" ] ] ]
 ]
 
 { #category : 'visiting' }
@@ -86,7 +106,17 @@ XMLSpringReconfigurator >> exportFiles [
 	self detectAllLinks.
 	self collectBeans.
 	self deleteUnusedBeans.
-	1halt.
+	self deleteDeadReferences.
+]
+
+{ #category : 'visiting' }
+XMLSpringReconfigurator >> generateFilesAt: aPath [
+
+	| fullPath |
+	fullPath := aPath , '/spring'.
+	xmlDocumentsPath do: [ :xdp |
+		(fullPath , '/' , xdp key) asFileReference ensureCreateFile writeStreamDo: [ :stream |
+			xdp value printOn: stream beforeWritingDo: [ :a |  ] ] ]
 ]
 
 { #category : 'accessing' }

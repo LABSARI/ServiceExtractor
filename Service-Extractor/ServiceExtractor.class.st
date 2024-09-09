@@ -7,7 +7,8 @@ Class {
 	#instVars : [
 		'methodToExtract',
 		'callGraph',
-		'classes'
+		'classes',
+		'extractPath'
 	],
 	#category : 'Service-Extractor',
 	#package : 'Service-Extractor'
@@ -121,16 +122,30 @@ ServiceExtractor >> extractCHA [
 ]
 
 { #category : 'extraction' }
+ServiceExtractor >> extractCode [
+
+	FAMIX2JavaVisitor new
+		slicedClasses: classes;
+		rootFolder: self extractPath asFileReference;
+		export: methodToExtract mooseModel
+]
+
+{ #category : 'extraction' }
 ServiceExtractor >> extractConfigurationFiles [
 
-	| rec |
+	| rec rac |
 	rec := XMLSpringReconfigurator new.
 	rec classDict: classes.
 	rec mooseModel: methodToExtract mooseModel.
-	rec exportFiles
+	rec exportFiles.
+	rec generateFilesAt: self extractPath.
 	
-	
-	
+
+	rac := XMLHibernateReconfigurator new. 
+	rac classDict: classes.
+	rac mooseModel: methodToExtract mooseModel.
+	rac exportFiles.
+	rac generateFilesAt: self extractPath
 ]
 
 { #category : 'extraction' }
@@ -268,6 +283,18 @@ ServiceExtractor >> extractMethod: aMethod [
 
 	self methodToExtract: aMethod.
 	^ self extractCHA
+]
+
+{ #category : 'accessing' }
+ServiceExtractor >> extractPath [
+
+	^ extractPath, '/', methodToExtract name
+]
+
+{ #category : 'accessing' }
+ServiceExtractor >> extractPath: anObject [
+
+	extractPath := anObject
 ]
 
 { #category : 'accessing' }
