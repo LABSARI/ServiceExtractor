@@ -14,6 +14,22 @@ Class {
 	#package : 'Service-Extractor'
 }
 
+{ #category : 'as yet unclassified' }
+JavaCallGraphModel class >> chaFromMethod: aMethod [
+
+	^ self new
+		  entryMethod: aMethod;
+		  cha
+]
+
+{ #category : 'as yet unclassified' }
+JavaCallGraphModel class >> vtaFromMethod: aMethod [
+
+	^ self new
+		  entryMethod: aMethod;
+		  buildtypeGraph
+]
+
 { #category : 'initialization' }
 JavaCallGraphModel >> addLinkFrom: m1 to: m2 [
 
