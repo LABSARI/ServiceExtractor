@@ -42,6 +42,15 @@ JavaCallGraphModel >> addLinkFrom: m1 to: m2 [
 		ifAbsentPut: [ Set with: m2 ]
 ]
 
+{ #category : 'as yet unclassified' }
+JavaCallGraphModel >> allPathsFrom: start to: end [
+
+	^ self
+		  findAllPathsFrom: start
+		  to: end
+		  currentPath: OrderedCollection new
+]
+
 { #category : 'accessing' }
 JavaCallGraphModel >> buildNodeFor: v [
 
@@ -173,6 +182,26 @@ JavaCallGraphModel >> entryMethod [
 JavaCallGraphModel >> entryMethod: anObject [
 
 	entryMethod := anObject
+]
+
+{ #category : 'as yet unclassified' }
+JavaCallGraphModel >> findAllPathsFrom: start to: end currentPath: currentPath [
+
+	| paths neighbors |
+	currentPath add: start.
+	start = end ifTrue: [ ^ { currentPath copy } ].
+	neighbors := callGraph at: start ifAbsent: [ ^ #(  ) ].
+
+	paths := OrderedCollection new.
+
+	neighbors do: [ :neighbor |
+		(currentPath includes: neighbor) ifFalse: [ 
+			(self findAllPathsFrom: neighbor to: end currentPath: currentPath)
+				do: [ :p | paths add: p ] ] ].
+
+	currentPath removeLast.
+
+	^ paths
 ]
 
 { #category : 'private utils' }
