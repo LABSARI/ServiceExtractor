@@ -30,6 +30,21 @@ JavaCallGraphModel class >> vtaFromMethod: aMethod [
 		  buildtypeGraph
 ]
 
+{ #category : 'accessing' }
+JavaCallGraphModel >> addGraphNodes [
+
+	classes do: [ :c |
+		c attributes do: [ :a |
+			a hasObjectType ifTrue: [ nodesDict at: a callGraphLabel put: a ] ] ].
+
+	methods do: [ :m |
+		m parameters , m localVariables , m implicitVariables do: [ :p |
+			p hasObjectType ifTrue: [ nodesDict at: p callGraphLabel put: p ] ].
+
+		m hasReturnObjectType ifTrue: [
+			nodesDict at: m returnCallGraphLabel put: m declaredType ] ]
+]
+
 { #category : 'initialization' }
 JavaCallGraphModel >> addLinkFrom: m1 to: m2 [
 
@@ -66,30 +81,35 @@ JavaCallGraphModel >> buildtypeGraph [
 
 	typeGraph := Dictionary new.
 	nodesDict := Dictionary new.
+
 	"Create nodes for the type graph."
-	classes do: [ :c |
-		c attributes do: [ :a |
-			a hasObjectType ifTrue: [ nodesDict at: a callGraphLabel put: a ] ] ].
+	self addGraphNodes.
 
-	methods do: [ :m |
-		m parameters , m localVariables , m implicitVariables do: [ :p |
-			p hasObjectType ifTrue: [ nodesDict at: p callGraphLabel put: p ] ].
-
-		m hasReturnObjectType ifTrue: [
-			nodesDict at: m returnCallGraphLabel put: m declaredType ] ].
 	"Add egdes to the type graph."
 	methods do: [ :m |
-		| ast |
+		| ast assignmentsAndDeclarators referenceAssignments methodCalls |
 		ast := (JavaSmaCCProgramNodeImporterVisitor new
 			        parseCodeMethodString: m sourceText)
 			       allFASTJavaMethodEntity first.
-		"Assignment statements: a = b or a = (C) b"
-		((ast allToScope: FASTJavaAssignementExpression)
-		 , (ast allToScope: FASTJavaVariableDeclarator) select: [ :a |
+
+
+		assignmentsAndDeclarators := (ast allToScope: FASTJavaAssignmentExpression), (ast allToScope: FASTJavaVariableDeclarator).
+		methodCalls := ast allToScope: FASTJavaMethodInvocation.
+		
+		referenceAssignments := (assignmentsAndDeclarators select: [ :a |
 			 a expression class = FASTJavaVariableExpression or: [
 				 a expression class = FASTJavaCastExpression and: [
-					 a expression expression class = FASTJavaVariableExpression ] ] ])
-			do: [ :fa |
+					 a expression expression class = FASTJavaVariableExpression ] ] ]).
+		
+		methodCalls := (assignmentsAndDeclarators  select: [:a | a expression class = FASTJavaMethodInvocation ]).
+		
+		methodCalls do: [ :c | |call|
+			call := c expression.
+			call receiver
+		].
+		
+		"Assignment statements: a = b or a = (C) b"
+		referenceAssignments do: [ :fa |
 				| var expVar famixVar famixExpVar |
 				var := fa variable.
 				expVar := fa expression.
@@ -97,10 +117,11 @@ JavaCallGraphModel >> buildtypeGraph [
 					expVar := expVar expression ].
 				famixVar := self findFamixVariable: var from: m.
 				famixExpVar := self findFamixVariable: expVar from: m.
+				
 				typeGraph
 					at: famixExpVar
 					ifPresent: [ :c | c add: famixVar ]
-					ifAbsentPut: [ OrderedCollection with: famixVar ] ] ]. 
+					ifAbsentPut: [ OrderedCollection with: famixVar ] ] ]
 ]
 
 { #category : 'accessing' }
@@ -153,7 +174,6 @@ JavaCallGraphModel >> cha [
 	[ worklist isEmpty ] whileFalse: [
 		| calls workMethod |
 		workMethod := worklist removeLast.
-
 		calls := workMethod queryOutgoing: FamixTInvocation.
 		calls do: [ :call |
 			| method overridingMethods |
@@ -161,9 +181,10 @@ JavaCallGraphModel >> cha [
 				method := call candidates first.
 
 				overridingMethods := OrderedCollection new.
-				(method isStub not and: [ method numberOfStatements > 0 ])
-					ifTrue: [ overridingMethods add: method ].
-				overridingMethods addAll: (method overridingMethods reject: #isStub).
+				method isStub not ifTrue: [ overridingMethods add: method ].
+				overridingMethods addAll:
+					(method overridingMethods reject: #isStub).
+				overridingMethods size > 1 ifTrue: [ method name traceCr ].
 				method isStub ifTrue: [ stubMethods add: call ].
 				overridingMethods do: [ :oMeth |
 					self addLinkFrom: workMethod to: oMeth.

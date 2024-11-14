@@ -3,7 +3,7 @@ Extension { #name : 'FamixJavaInterface' }
 { #category : '*Service-Extractor' }
 FamixJavaInterface >> allSubclassesAndImplementations [
 
-	| subclasses result |
+	| subInterfaces result |
 	result := OrderedCollection new.
 
 	self implementations do: [ :imp |
@@ -11,10 +11,10 @@ FamixJavaInterface >> allSubclassesAndImplementations [
 		result addAll: imp implementingClass subclassHierarchy ].
 
 
-	subclasses := self subclassHierarchy.
-	result addAll: subclasses.
+	subInterfaces := self subclassHierarchy.
+	result addAll: subInterfaces.
 
-	subclasses do: [ :i |
+	subInterfaces do: [ :i |
 		i implementations do: [ :imp |
 			result add: imp implementingClass.
 			result addAll: imp implementingClass subclassHierarchy ] ].

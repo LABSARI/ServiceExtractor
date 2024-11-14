@@ -56,7 +56,8 @@ MiServiceExtractorBrowser >> connectPresenters [
 
 	submitButton action: [ 
 		
-		self run ]
+		self run.
+		self model featureWithCommonMethods ]
 ]
 
 { #category : 'actions' }
@@ -108,6 +109,7 @@ MiServiceExtractorBrowser >> resetCanvas [
 { #category : 'actions' }
 MiServiceExtractorBrowser >> run [
 
+	1halt.
 	methodList items ifEmpty: [ ^self ].
 	self model methodToExtract: methodList selectedItems first.
 	self resetCanvas.

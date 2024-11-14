@@ -32,7 +32,6 @@ MiServiceExtractorModel >> elementIndex [
 						  at: famixElt
 						  ifPresent: [ :c | c add: m ]
 						  ifAbsentPut: [ Set with: m ] ] ] ].
-			1halt.
 		  elementIndex ]
 ]
 
@@ -52,6 +51,22 @@ MiServiceExtractorModel >> extractionDictionary [
 				  at: m
 				  put: (ServiceExtractor extractMethod: m) ].
 		  extractionDictionary ]
+]
+
+{ #category : 'accessing' }
+MiServiceExtractorModel >> featureWithCommonMethods [
+
+	| dict index commonFeature |
+	dict := self currentExtract.
+	1 halt.
+	index := self elementIndex.
+	commonFeature := Set new.
+	dict valuesDo: [ :list |
+		list do: [ :elt |
+			(elt isMethod and: [ elt ] )ifTrue: [
+				(index at: elt) do: [ :feature |
+					feature ~= self methodToExtract ifTrue: [
+						commonFeature add: feature ] ] ] ] ]
 ]
 
 { #category : 'accessing' }

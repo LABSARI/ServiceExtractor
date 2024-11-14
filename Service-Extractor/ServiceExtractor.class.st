@@ -18,8 +18,7 @@ Class {
 ServiceExtractor class >> extractMethod: aMethod [
 
 	^ self new
-		  extractMethod: aMethod;
-		  extractCHA
+		  extractMethod: aMethod
 ]
 
 { #category : 'extraction' }
@@ -215,7 +214,7 @@ ServiceExtractor >> extractFromCallGraphCHA [
 		       entryMethod: self methodToExtract;
 		       yourself.
 	callGraph := cgm cha.
-
+ 
 	classes := Dictionary new.
 	cgMethods := Set with: methodToExtract.
 	cgMethods addAll:
@@ -237,11 +236,11 @@ ServiceExtractor >> extractFromCallGraphCHA [
 			lvType := lv declaredType.
 			self collectDependenciesOf: lvType in: classes ].
 
-		m overriddenMethod ifNotNil: [
-			classes
-				at: m overriddenMethod parentType
-				ifPresent: [ :entities | entities add: m overriddenMethod ]
-				ifAbsentPut: [ Set with: m overriddenMethod ] ].
+	m parentType isInterface ifFalse:[m overriddenMethod ifNotNil: [
+	classes
+		at: m overriddenMethod parentType
+		ifPresent: [ :entities | entities add: m overriddenMethod ]
+		ifAbsentPut: [ Set with: m overriddenMethod ] ]].
 
 		classes
 			at: class
@@ -255,8 +254,10 @@ ServiceExtractor >> extractFromCallGraphCHA [
 
 	
 	cgm stubMethods do: [ :sm |
-		sm receiver declaredType allSubclassesAndImplementations do: [ :ci |
-			classes at: ci ifAbsentPut: Set new ] ].
+		sm receiver ifNotNil: [:r | |cla|
+			cla := r isClass ifTrue: [ r ] ifFalse: [ r declaredType ].
+			cla allSubclassesAndImplementations do: [ :ci |
+			classes at: ci ifAbsentPut: Set new ] ]].
 
 	classes keysDo: [ :c |
 		(classes at: c) ifNotEmpty: [
