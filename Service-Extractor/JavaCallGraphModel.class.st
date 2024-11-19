@@ -81,7 +81,7 @@ JavaCallGraphModel >> buildtypeGraph [
 
 	typeGraph := Dictionary new.
 	nodesDict := Dictionary new.
-
+	1halt.
 	"Create nodes for the type graph."
 	self addGraphNodes.
 
@@ -164,33 +164,201 @@ JavaCallGraphModel >> callGraph: dict depth: depth method: aMethod [
 { #category : 'initialization' }
 JavaCallGraphModel >> cha [
 
-	| worklist |
+	| worklist visited |
 	callGraph := Dictionary new.
 	stubMethods := OrderedCollection new.
-	worklist := LinkedList new.
+	worklist := OrderedCollection new.
+	visited := Dictionary new.
 
 	worklist add: entryMethod.
+	visited at: entryMethod put: true.
 
 	[ worklist isEmpty ] whileFalse: [
 		| calls workMethod |
 		workMethod := worklist removeLast.
-		calls := workMethod queryOutgoing: FamixTInvocation.
+		"self debugCaca: {
+				workMethod.
+				worklist }."
+		calls := workMethod outgoingInvocations.
 		calls do: [ :call |
-			| method overridingMethods |
-			call candidates ifNotEmpty: [
-				method := call candidates first.
+			| overridingMethods method receiver nilReceiverInFAST |
+			nilReceiverInFAST := false.
+			call candidates
+				ifNotEmpty: [
+					method := call candidates first.
+					receiver := call receiver.
 
-				overridingMethods := OrderedCollection new.
-				method isStub not ifTrue: [ overridingMethods add: method ].
-				overridingMethods addAll:
-					(method overridingMethods reject: #isStub).
-				overridingMethods size > 1 ifTrue: [ method name traceCr ].
-				method isStub ifTrue: [ stubMethods add: call ].
-				overridingMethods do: [ :oMeth |
-					self addLinkFrom: workMethod to: oMeth.
-					(callGraph includesKey: oMeth) ifFalse: [ worklist add: oMeth ] ] ] ] ].
+
+
+					(receiver isNil and: [ method isConstructor not ]) ifTrue: [ "Receiver is nil, big problems start here..."
+						| fast fastInvocations invocations invocation |
+						1 haltIf: [ method mooseID = 1847135 ].
+						method isClassSide
+							ifTrue: [ "It means that the method is called on a class but the information is missing in the model."
+								| tName |
+								fast := JavaSmaCCProgramNodeImporterVisitor
+									        parseCodeMethodString: workMethod sourceText.
+								"We have to find the receiver of that call using fast."
+
+								fastInvocations := fast allWithType: FASTJavaMethodInvocation.
+								invocations := fastInvocations select: [ :i |
+									               i name = method name and: [
+										               i arguments size = method parameters size
+											               and: [
+											               i receiver isNil or: [
+												               i receiver isIdentifier ] ] ] ].
+								(invocations isEmpty and: [ method isStub ]) ifTrue: [
+									invocations := fastInvocations select: [ :i |
+										               i name = method name ] ].
+								invocation := invocations first.
+								tName := invocation receiver name.
+								method parentType name = tName
+									ifTrue: [ receiver := method parentType ]
+									ifFalse: [
+										receiver := method parentType subclassHierarchy detect: [ :c |
+											            c name = tName ] ] ]
+							ifFalse: [
+								fast := JavaSmaCCProgramNodeImporterVisitor
+									        parseCodeMethodString: workMethod sourceText.
+								"We have to find the receiver of that call using fast."
+
+								fastInvocations := fast allWithType: FASTJavaMethodInvocation.
+								invocations := fastInvocations select: [ :i |
+									               i name = method name and: [
+										               i arguments size = method parameters size
+											               and: [
+											               i receiver isNil or: [
+												               i receiver isVariableExpression not ] ] ] ].
+								(invocations isEmpty and: [ method isStub ]) ifTrue: [
+									invocations := fastInvocations select: [ :i | "1 haltIf: [ invocations size > 1 ]"
+										               i name = method name ] ].
+								invocation := invocations first.
+								1 haltIf: [ "method mooseID = 1847135" false ].
+								invocation receiver ifNil: [ nilReceiverInFAST := true ].
+								(invocation receiver isNotNil and: [
+									 invocation receiver isInvocation or: [
+										 invocation receiver isNewExpression ] ])
+									ifTrue: [
+										| i cs actualMethod iName |
+										i := invocation receiver.
+										iName := i isNewExpression
+											         ifTrue: [ i type typeName name ]
+											         ifFalse: [
+												         i isInfixOperation
+													         ifTrue: [ invocation name ]
+													         ifFalse: [ i name ] ].
+										cs := calls select: [ :c |
+											      c candidates notEmpty and: [
+												      c candidates first name = iName and: [
+													      c candidates first parameters size
+													      = i arguments size or: [
+														      (self numberOfArguments: c candidates first)
+														      = i arguments size ] ] ] ].
+										"1 haltIf: [ cs size > 1 ]."
+										actualMethod := cs first candidates first.
+										receiver := actualMethod isConstructor
+											            ifTrue: [ actualMethod parentType ]
+											            ifFalse: [ actualMethod declaredType ].
+
+										(receiver notNil and: [ receiver isParameterType ]) ifTrue: [
+											
+											cs first receiver ifNil: [ 
+												"Nothing to do, we have no parameter type bounds information in famix..."
+											 ].
+											(cs first receiver notNil and: [cs first receiver isStructuralEntity]) 
+												ifTrue: [
+													| cParams |
+													cs first receiver declaredType
+														ifNil: [
+															| fa ds ps |
+															fa := JavaSmaCCProgramNodeImporterVisitor
+																      parseCodeMethodString:
+																      'int f(){' , cs first receiver sourceText , ';}'.
+															ds := (fa allWithType: FASTJavaVarDeclStatement) first.
+															ps := ds type arguments collect: [ :a |
+																      a typeName name ].
+															cParams := ps collect: [ :p |
+																           entryMethod mooseModel allClasses detect: [
+																	           :c | c name = p ] ] ]
+														ifNotNil: [
+														cParams := cs first receiver declaredType
+															           concreteParameters ].
+
+													receiver := cParams at:
+														            (receiver typeContainer genericParameters
+															             indexOf: receiver) ]
+												ifFalse: [  ] ] ]
+									ifFalse: [
+										invocation receiver ifNil: [ nilReceiverInFAST := true ].
+										(invocation receiver notNil and: [
+											 invocation receiver isInfixOperation ]) ifTrue: [
+											| cs |
+											"If a method is called on the result of an infix operation, the result is probably a String"
+											cs := calls select: [ :c |
+												      c candidates notEmpty and: [
+													      c candidates first name = invocation name and: [
+														      c candidates first parameters size
+														      = invocation arguments size or: [
+															      (self numberOfArguments: c candidates first)
+															      = invocation arguments size ] ] ] ].
+											receiver := cs first candidates first parentType.
+
+											1 haltIf: [ receiver name ~= 'String' or: [ cs size > 1 ] ] ] ] ] ].
+
+					overridingMethods := OrderedCollection new.
+
+					(receiver isNil and: [ method parentType isNil ]) ifTrue: [
+						1 halt ].
+					receiver ifNil: [
+						nilReceiverInFAST
+							ifTrue: [ receiver := workMethod parentType ]
+							ifFalse: [
+								method isConstructor
+									ifTrue: [ receiver := method parentType ]
+									ifFalse: [ "1 halt " ] ] ].
+
+
+					receiver ifNotNil: [
+						| rcv |
+						rcv := self receiverType: receiver.
+						rcv ifNil: [ rcv := method parentType ].
+						rcv ifNil: [ 1 halt ].
+						rcv isParameterType ifTrue: [ 
+							"If parameter type has upper bounds, we can use the class or/and interface(s)"
+							rcv := method parentType.
+						].
+						
+						rcv addMethodOverriding: method in: overridingMethods.
+
+						overridingMethods := overridingMethods reject: [ :m |
+							                     m isStub or: [
+								                     m parentType isAnonymousClass and: [
+									                     m parentType typeContainer ~= workMethod ] ] ] ].
+
+
+
+					method isStub ifFalse: [ overridingMethods add: method ].
+					1 haltIf: [ overridingMethods size > 200 ].
+					method isStub ifTrue: [ stubMethods add: method ].
+
+
+					overridingMethods do: [ :oMeth |
+						self addLinkFrom: workMethod to: oMeth.
+						((callGraph includesKey: oMeth) or: [
+							 visited includesKey: oMeth ]) ifFalse: [
+							worklist add: oMeth.
+							visited at: oMeth put: true ] ] ]
+				ifEmpty: [ 'No call candidate' traceCr ] ] ].
 	classes := methods collectAsSet: [ :m | m parentType ].
+	'Done' traceCr.
 	^ callGraph
+]
+
+{ #category : 'as yet unclassified' }
+JavaCallGraphModel >> debugCaca: aCollection [ 
+	<debuggerCompleteToSender>
+	"self halt......"
+	('-----------------', aCollection first parentType name, '.', aCollection first name) traceCr.
 ]
 
 { #category : 'accessing' }
@@ -283,6 +451,32 @@ JavaCallGraphModel >> initialize [
 
 	classes := Set new.
 	methods := Set new
+]
+
+{ #category : 'util' }
+JavaCallGraphModel >> numberOfArguments: aFamixJavaMethod [ 
+	"Looks for the number of parameters of a stub method"
+	|parameters|
+	parameters := (aFamixJavaMethod signature
+		               copyFrom: aFamixJavaMethod name size + 2
+		               to: aFamixJavaMethod signature size - 1)
+		              ifEmpty: [ #(  ) ]
+		              ifNotEmpty: [ :params | params splitOn: $, ].
+	^ parameters size
+	
+]
+
+{ #category : 'util' }
+JavaCallGraphModel >> receiverType: methodReceiver [
+
+	methodReceiver isStructuralEntity ifTrue: [
+		methodReceiver isImplicitVariable ifTrue: [
+			methodReceiver name = 'this' ifTrue: [
+				^ methodReceiver parentBehaviouralEntity parentType ].
+			^ methodReceiver parentBehaviouralEntity parentType ].
+		^ methodReceiver declaredType ].
+	methodReceiver isType ifTrue: [ ^ methodReceiver ].
+	1 halt
 ]
 
 { #category : 'accessing' }
