@@ -5,10 +5,10 @@ Class {
 	#name : 'ServiceExtractor',
 	#superclass : 'Object',
 	#instVars : [
-		'methodToExtract',
 		'callGraph',
 		'classes',
-		'extractPath'
+		'extractPath',
+		'methodsToExtract'
 	],
 	#category : 'Service-Extractor',
 	#package : 'Service-Extractor'
@@ -18,7 +18,14 @@ Class {
 ServiceExtractor class >> extractMethod: aMethod [
 
 	^ self new
-		  extractMethod: aMethod
+		  extractMethods: {aMethod}
+]
+
+{ #category : 'extraction' }
+ServiceExtractor class >> extractMethods: aCollectionOfMethods [
+
+	^ self new
+		  extractMethods: aCollectionOfMethods
 ]
 
 { #category : 'extraction' }
@@ -67,33 +74,6 @@ ServiceExtractor >> collectDependenciesOf: aClass in: classDict [
 ]
 
 { #category : 'extraction' }
-ServiceExtractor >> createModel [
-
-	| subModel packages |
-	self
-		assert: classes notNil
-		description:
-		'classes should be computed before executing this method'.
-	packages := Set new.
-	subModel := FamixJavaModel named: methodToExtract name , 'Model'.
-
-	classes associationsDo: [ :assoc |
-		| type newType elements |
-		type := assoc key.
-		elements := assoc value.
-		newType := type copy.
-		subModel add: newType.
-		packages addAll: (newType allAtScope: FamixJavaPackage).
-		newType ].
-	packages do: [ :p |
-		| newPackage |
-		newPackage := p copy.
-		newPackage types:
-			(newPackage types copy select: [ :t | classes includes: t ]).
-		subModel add: newPackage ]
-]
-
-{ #category : 'extraction' }
 ServiceExtractor >> dependenciesOf: aMethod [
 
 	| dependencies attributes |
@@ -126,7 +106,7 @@ ServiceExtractor >> extractCode [
 	FAMIX2JavaVisitor new
 		slicedClasses: classes;
 		rootFolder: self extractPath asFileReference;
-		export: methodToExtract mooseModel
+		export: methodsToExtract anyOne mooseModel
 ]
 
 { #category : 'extraction' }
@@ -135,14 +115,14 @@ ServiceExtractor >> extractConfigurationFiles [
 	| rec rac |
 	rec := XMLSpringReconfigurator new.
 	rec classDict: classes.
-	rec mooseModel: methodToExtract mooseModel.
+	rec mooseModel: methodsToExtract anyOne mooseModel.
 	rec exportFiles.
 	rec generateFilesAt: self extractPath.
 	
 
 	rac := XMLHibernateReconfigurator new. 
 	rac classDict: classes.
-	rac mooseModel: methodToExtract mooseModel.
+	rac mooseModel: methodsToExtract anyOne mooseModel.
 	rac exportFiles.
 	rac generateFilesAt: self extractPath
 ]
@@ -157,7 +137,7 @@ ServiceExtractor >> extractFromCallGraph [
 	callGraph := self methodToExtract callGraph.
 
 	classes := Dictionary new.
-	cgMethods := Set with: methodToExtract.
+	cgMethods := Set with: methodsToExtract.
 	cgMethods addAll:
 		(callGraph associations flatCollectAsSet: [ :a | a value ]).
 
@@ -211,12 +191,12 @@ ServiceExtractor >> extractFromCallGraphCHA [
 
 	| cgMethods cgm |
 	cgm := JavaCallGraphModel new
-		       entryMethod: self methodToExtract;
+		       entryMethods: self methodsToExtract;
 		       yourself.
 	callGraph := cgm cha.
  
 	classes := Dictionary new.
-	cgMethods := Set with: methodToExtract.
+	cgMethods := Set withAll: methodsToExtract.
 	cgMethods addAll:
 		(callGraph associations flatCollectAsSet: [ :a | a value ]).
 
@@ -253,11 +233,11 @@ ServiceExtractor >> extractFromCallGraphCHA [
 					ifTrue: [ (classes at: class) add: access accessor ] ] ] ].
 
 	
-	cgm stubMethods do: [ :sm |
+	"cgm stubMethods do: [ :sm |
 		sm receiver ifNotNil: [:r | |cla|
 			cla := r isClass ifTrue: [ r ] ifFalse: [ r declaredType ].
 			cla allSubclassesAndImplementations do: [ :ci |
-			classes at: ci ifAbsentPut: Set new ] ]].
+			classes at: ci ifAbsentPut: Set new ] ]]."
 
 	classes keysDo: [ :c |
 		(classes at: c) ifNotEmpty: [
@@ -280,16 +260,16 @@ ServiceExtractor >> extractFromCallGraphCHA [
 ]
 
 { #category : 'extraction' }
-ServiceExtractor >> extractMethod: aMethod [
+ServiceExtractor >> extractMethods: aCollectionOfMethods [
 
-	self methodToExtract: aMethod.
+	self methodsToExtract: aCollectionOfMethods.
 	^ self extractCHA
 ]
 
 { #category : 'accessing' }
 ServiceExtractor >> extractPath [
 
-	^ extractPath, '/', methodToExtract name
+	^ extractPath, '/', methodsToExtract anyOne name
 ]
 
 { #category : 'accessing' }
@@ -299,13 +279,13 @@ ServiceExtractor >> extractPath: anObject [
 ]
 
 { #category : 'accessing' }
-ServiceExtractor >> methodToExtract [
+ServiceExtractor >> methodsToExtract [
 
-	^ methodToExtract
+	^ methodsToExtract
 ]
 
 { #category : 'accessing' }
-ServiceExtractor >> methodToExtract: anObject [
+ServiceExtractor >> methodsToExtract: anObject [
 
-	methodToExtract := anObject
+	methodsToExtract := anObject
 ]
