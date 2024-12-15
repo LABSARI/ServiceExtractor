@@ -44,6 +44,12 @@ ServiceExtractor >> attributesUsedBy: aMethod [
 	^ attributes
 ]
 
+{ #category : 'accessing' }
+ServiceExtractor >> classes [
+
+	^ classes
+]
+
 { #category : 'extraction' }
 ServiceExtractor >> collectDependenciesOf: aClass in: classDict [
 

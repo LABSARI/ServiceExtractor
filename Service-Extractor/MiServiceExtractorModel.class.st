@@ -5,11 +5,24 @@ Class {
 		'methodList',
 		'extractionDictionary',
 		'elementIndex',
-		'methodToExtract'
+		'methodToExtract',
+		'uccg'
 	],
 	#category : 'Service-Extractor',
 	#package : 'Service-Extractor'
 }
+
+{ #category : 'accessing' }
+MiServiceExtractorModel >> buildCallGraph [
+
+	uccg := Smalltalk at: #uccg ifAbsentPut: [
+		        JavaCallGraphModel new
+			        entryMethods: self methodList;
+			        cha;
+			        computeDominators;
+			        computeDominatorTree;
+			        yourself ].
+]
 
 { #category : 'accessing' }
 MiServiceExtractorModel >> currentExtract [
@@ -54,22 +67,6 @@ MiServiceExtractorModel >> extractionDictionary [
 ]
 
 { #category : 'accessing' }
-MiServiceExtractorModel >> featureWithCommonMethods [
-
-	| dict index commonFeature |
-	dict := self currentExtract.
-	1 halt.
-	index := self elementIndex.
-	commonFeature := Set new.
-	dict valuesDo: [ :list |
-		list do: [ :elt |
-			(elt isMethod and: [ elt ] )ifTrue: [
-				(index at: elt) do: [ :feature |
-					feature ~= self methodToExtract ifTrue: [
-						commonFeature add: feature ] ] ] ] ]
-]
-
-{ #category : 'accessing' }
 MiServiceExtractorModel >> methodList [
 
 	^ methodList
@@ -97,4 +94,16 @@ MiServiceExtractorModel >> methodToExtract: aFamixJavaMethod [
 MiServiceExtractorModel >> miSelectedItem [
 
 	^ {  }
+]
+
+{ #category : 'accessing' }
+MiServiceExtractorModel >> uccg [
+
+	^ uccg
+]
+
+{ #category : 'accessing' }
+MiServiceExtractorModel >> uccg: anObject [
+
+	uccg := anObject
 ]
