@@ -12,8 +12,9 @@ Class {
 		'tBeans',
 		'xmlDocumentsPath'
 	],
-	#category : 'Service-Extractor',
-	#package : 'Service-Extractor'
+	#category : 'Service-Extractor-Extractor',
+	#package : 'Service-Extractor',
+	#tag : 'Extractor'
 }
 
 { #category : 'accessing' }

@@ -5,10 +5,12 @@ Class {
 		'methodList',
 		'functionalityMethods',
 		'canvas',
-		'submitButton'
+		'submitButton',
+		'extractions'
 	],
-	#category : 'Service-Extractor',
-	#package : 'Service-Extractor'
+	#category : 'Service-Extractor-Browser',
+	#package : 'Service-Extractor',
+	#tag : 'Browser'
 }
 
 { #category : 'instance creation' }
@@ -82,86 +84,47 @@ MiServiceExtractorBrowser >> buildDominatorTreeVisualization [
 { #category : 'actions' }
 MiServiceExtractorBrowser >> buildExtractionMap [
 
-	| methodsToExtract extractions extractionShapes sets dup lb |
-	self assert: methodList selectedItems size = 2.
-	methodsToExtract := methodList selectedItems first: 2.
-	extractions := methodsToExtract collect: [ :m |
-		               ServiceExtractor new
-			               extractMethods: { m };
-			               yourself ].
-
-	extractionShapes := extractions
+	| methodsToExtract extraction builder |
+	
+	methodsToExtract := methodList selectedItems.
+	methodList selectItems: {  }.
+	methodList items: methodList items \ methodsToExtract.
+	extraction := ServiceExtractor new
+		              extractMethods: methodsToExtract;
+		              yourself.
+	self model addExtraction: extraction.
+	
+	
+	builder := MiServiceExtractorBuilder new
+		           mapModel: self model;
+		           container: canvas canvas;
+		           build;
+		           yourself
+	
+	"extractionShapes := extractions
 		                    collect: [ :e | self shapeForExtraction: e ]
 		                    as: RSGroup.
 	(RSHorizontalLineLayout withGap: 40) on: extractionShapes.
-	sets := extractionShapes collect: [ :e |
-		        (e allChildren
-			         select: [ :s |
-			         s model isMooseObject and: [ s model isMethod ] ]
-			         thenCollect: #model) asSet ].
-	dup := Set intersectSets: sets.
-
-
-
+	
 	lb := RSLabel text:
-		      'Number of duplicated methods: ' , dup size asString.
+		      'Number of duplicated methods: ' .
+	canvas canvas add: lb.
+	canvas canvas addAll: extractionShapes.
+	dup := (canvas canvas allChildren
+		        select: [ :s |
+		        s model isMooseObject and: [ s model isMethod ] ]
+		        thenCollect: #model) groupedBy: [ :a | a ].
+	
 	RSVerticalLineLayout new alignLeft on: {
 			lb.
 			extractionShapes }.
-	canvas canvas add: lb.
-	canvas canvas addAll: extractionShapes.
 	(canvas canvas allChildren select: [ :s |
 		 s model isMooseObject and: [ s model isMethod ] ]) do: [ :s |
-		(dup includes: s model) ifTrue: [
+		(dup at: s model) size > 1  ifTrue: [
 			s color: Color red ] ].
 	canvas canvas lines do: #update.
-	canvas canvas signalUpdate
-]
-
-{ #category : 'actions' }
-MiServiceExtractorBrowser >> buildMap [
-
-	| methodToShow subgraph allMethods shapes comps |
-	methodToShow := methodList selectedItems first.
-	specModel uccg computeModules.
-	subgraph := specModel uccg callGraphOf: methodToShow.
-	allMethods := Set withAll: subgraph keys , subgraph values flatten.
-	
-	shapes := allMethods collect: [ :m |
-		          | shape |
-		          shape := RSCircle new
-			                   size: 10;
-			                   model: m;
-			                   color: (self colorFor: m);
-			                   yourself.
-		          shape @ (RSPopup new
-			           text: [ :model |
-				           model name , (uccg predecessors: m) size asString ];
-			           yourself).
-		          shape ].
-
-	comps := (shapes groupedBy: [ :s |
-		          s model tags
-			          ifEmpty: [ s model ]
-			          ifNotEmpty: [ s model tags first ] ]) associations
-		         collect: [ :assoc |
-			         RSFlowLayout on: assoc value asOrderedCollection.
-			         RSComposite new
-				         shapes: assoc value;
-				         padding: 20;
-				         color: Color gray translucent translucent;
-				         adjustToChildren;
-				         yourself ].
-	RSFlowLayout on: comps asOrderedCollection.
-
-	canvas canvas addAll: comps.
-	"RSLineBuilder arrowedLine
-		withBorderAttachPoint;
-		width: 1;
-		canvas: canvas canvas;
-		shapes: shapes asOrderedCollection;
-		connectToAll: [ :m | specModel uccg callGraph at: m ifAbsent: [ {  } ] ]."
-	canvas canvas signalUpdate
+	canvas canvas signalUpdate.
+	canvas canvas zoomToFit"
 ]
 
 { #category : 'testing' }
@@ -191,9 +154,17 @@ MiServiceExtractorBrowser >> followEntity: anEntity [
 
 	| list |
 	list := anEntity asOrderedCollection.
+	list sort: [ :a :b | a parentType name < b parentType name ].
 	methodList items: list.
 	specModel methodList: list.
 	specModel buildCallGraph.
+]
+
+{ #category : 'initialization' }
+MiServiceExtractorBrowser >> initialize [
+
+	super initialize.
+	extractions := OrderedCollection new
 ]
 
 { #category : 'actions' }
@@ -236,7 +207,8 @@ MiServiceExtractorBrowser >> resetCanvas [
 { #category : 'actions' }
 MiServiceExtractorBrowser >> run [
 
-	methodList items ifEmpty: [ ^self ].
+	methodList items ifEmpty: [ ^ self ].
+	methodList selectedItems ifEmpty: [ ^ self ].
 	self resetCanvas.
 	self buildExtractionMap
 ]
@@ -248,8 +220,8 @@ MiServiceExtractorBrowser >> shapeForClass: assoc from: extraction [
 	shape := RSComposite new
 		         model: assoc key;
 		         yourself.
-	domMethods := uccg dominatedMethodsFrom:
-		              extraction methodsToExtract first.
+	domMethods := extraction methodsToExtract flatCollectAsSet: [ :m |
+		              uccg dominatedMethodsFrom: m ].
 	methodShapes := ((assoc value select: #isMethod) reject: [ :m |
 		                 m name = '<Initializer>' ])
 		                collect: [ :m |
@@ -258,9 +230,14 @@ MiServiceExtractorBrowser >> shapeForClass: assoc from: extraction [
 			                lb := RSLabel text: m name , '(): ' , pds model: m.
 			                (domMethods includes: m) ifTrue: [
 				                lb color: (Color fromHexString: '058B71') ].
-			                extraction methodsToExtract first = m ifTrue: [
+			                (extraction methodsToExtract includes: m) ifTrue: [
 				                lb text: '--->' , lb text.
 				                lb color: (Color fromHexString: 'D35400') ].
+			                lb
+				                when: RSMouseClick
+				                do: [ :e |
+				                MiInspectorBrowser inspect: (uccg entryPointsUsing: e shape model) ]
+				                for: self.
 			                lb ]
 		                as: RSGroup.
 
@@ -304,17 +281,96 @@ MiServiceExtractorBrowser >> shapeForClass: assoc from: extraction [
 { #category : 'actions' }
 MiServiceExtractorBrowser >> shapeForExtraction: extraction [
 
-	| shape classShapes label |
+	| shape classShapes label methodsName presenterShapes serviceShapes daoShapes otherShapes layers os maxWidth |
 	shape := RSComposite new.
 	classShapes := extraction classes associations
 		               collect: [ :assoc |
 		               self shapeForClass: assoc from: extraction ]
 		               as: RSGroup.
-	RSFlowLayout on: classShapes.
+
+
+
+	presenterShapes := classShapes select: [ :s |
+		                   | c |
+		                   c := s model.
+		                   (c name beginsWith: 'Uc' caseSensitive: false)
+			                   and: [
+				                   (c name endsWith: 'Impl' caseSensitive: false)
+					                   and: [
+					                   (c name
+						                    includesSubstring: 'usine'
+						                    caseSensitive: false) not ] ] ].
+	RSFlowLayout on: presenterShapes.
+	serviceShapes := classShapes select: [ :s |
+		                 | c |
+		                 c := s model.
+		                 c superclassHierarchy anySatisfy: [ :sc |
+			                 sc name = 'ServiceAbstract' ] ].
+	RSFlowLayout on: serviceShapes.
+	daoShapes := classShapes select: [ :s |
+		             | c |
+		             c := s model.
+		             c superclassHierarchy anySatisfy: [ :sc |
+			             sc name = 'DaoEntiteAbstract' ] ].
+	RSFlowLayout on: daoShapes.
+	otherShapes := classShapes
+	               \ (presenterShapes , serviceShapes , daoShapes).
+	RSFlowLayout on: otherShapes.
+
+
+	methodsName := extraction methodsToExtract collect: [ :m |
+		               RSLabel text: m parentType name , '>>' , m name ].
+	RSVerticalLineLayout new
+		alignCenter;
+		on: methodsName.
+
+	layers := (RSGroup withAll: {
+			           (presenterShapes asShape
+				            border: (RSBorder new
+						             width: 1;
+						             dashArray: #( 5 10 );
+						             color: Color black;
+						             yourself);
+				            padding: 10).
+			           (serviceShapes asShape
+				            border: (RSBorder new
+						             width: 1;
+						             dashArray: #( 5 10 );
+						             color: Color black;
+						             yourself);
+				            padding: 10).
+			           (daoShapes asShape
+				            border: (RSBorder new
+						             width: 1;
+						             dashArray: #( 5 10 );
+						             color: Color black;
+						             yourself);
+				            padding: 10) }) asShape.
+	maxWidth := layers children max: [ :l | l width ].
+	layers children do: [ :c | c width: maxWidth ].
+	RSVerticalLineLayout new
+		gapSize: 20;
+		on: layers children.
+	layers adjustToChildren.
+	os := otherShapes asShape.
+	os
+		border: (RSBorder new
+				 width: 1;
+				 dashArray: #( 5 10 );
+				 color: Color black;
+				 yourself);
+		padding: 10.
+	RSHorizontalLineLayout new
+		alignMiddle;
+		gapSize: 20;
+		on: {
+				os.
+				layers }.
+	(RSGroup withAll: {
+			 os.
+			 layers }) asShape padding: 10.
 	label := RSComposite new
-		         add: (RSLabel text:
-					          'Extraction: ' , extraction methodsToExtract first name
-					          , '()');
+		         addAll: methodsName;
 		         yourself.
 	label color: (Color fromHexString: '68D094').
 	label adjustToChildren.
@@ -325,7 +381,9 @@ MiServiceExtractorBrowser >> shapeForExtraction: extraction [
 		for: self.
 
 	shape add: label.
-	shape add: (classShapes asShape padding: 10).
+	shape add: ((RSGroup withAll: {
+				  os.
+				  layers }) asShape padding: 10).
 	RSVerticalLineLayout new
 		alignCenter;
 		on: shape children.
@@ -339,8 +397,8 @@ MiServiceExtractorBrowser >> shapeForExtraction: extraction [
 		withBorderAttachPoint;
 		width: 1;
 		canvas: canvas canvas;
-		shapes:
-			((classShapes flatCollect: #allChildren) select: [ :s | s model notNil ]);
+		shapes: ((classShapes flatCollect: #allChildren) select: [ :s |
+					 s model notNil ]);
 		connectToAll: [ :m |
 			specModel uccg callGraph at: m ifAbsent: [ {  } ] ].
 

@@ -10,8 +10,9 @@ Class {
 		'extractPath',
 		'methodsToExtract'
 	],
-	#category : 'Service-Extractor',
-	#package : 'Service-Extractor'
+	#category : 'Service-Extractor-Extractor',
+	#package : 'Service-Extractor',
+	#tag : 'Extractor'
 }
 
 { #category : 'extraction' }
@@ -195,12 +196,9 @@ ServiceExtractor >> extractFromCallGraph [
 { #category : 'extraction' }
 ServiceExtractor >> extractFromCallGraphCHA [
 
-	| cgMethods cgm |
-	cgm := JavaCallGraphModel new
-		       entryMethods: self methodsToExtract;
-		       yourself.
-	callGraph := cgm cha.
- 
+	| cgMethods |
+	callGraph := uccg callGraphOfMethods: self methodsToExtract.
+
 	classes := Dictionary new.
 	cgMethods := Set withAll: methodsToExtract.
 	cgMethods addAll:
@@ -222,11 +220,12 @@ ServiceExtractor >> extractFromCallGraphCHA [
 			lvType := lv declaredType.
 			self collectDependenciesOf: lvType in: classes ].
 
-	m parentType isInterface ifFalse:[m overriddenMethod ifNotNil: [
-	classes
-		at: m overriddenMethod parentType
-		ifPresent: [ :entities | entities add: m overriddenMethod ]
-		ifAbsentPut: [ Set with: m overriddenMethod ] ]].
+		m parentType isInterface ifFalse: [
+			m overriddenMethod ifNotNil: [
+				classes
+					at: m overriddenMethod parentType
+					ifPresent: [ :entities | entities add: m overriddenMethod ]
+					ifAbsentPut: [ Set with: m overriddenMethod ] ] ].
 
 		classes
 			at: class
@@ -238,7 +237,7 @@ ServiceExtractor >> extractFromCallGraphCHA [
 				(access isWrite and: [ access accessor name = '<Initializer>' ])
 					ifTrue: [ (classes at: class) add: access accessor ] ] ] ].
 
-	
+
 	"cgm stubMethods do: [ :sm |
 		sm receiver ifNotNil: [:r | |cla|
 			cla := r isClass ifTrue: [ r ] ifFalse: [ r declaredType ].
@@ -249,7 +248,7 @@ ServiceExtractor >> extractFromCallGraphCHA [
 		(classes at: c) ifNotEmpty: [
 			c methods do: [ :m |
 				m isConstructor ifTrue: [ (classes at: c) add: m ] ] ] ].
-	
+
 
 	classes valuesDo: [ :v |
 		v do: [ :e |
@@ -260,7 +259,7 @@ ServiceExtractor >> extractFromCallGraphCHA [
 	classes keysDo: [ :c |
 		(c superclassHierarchy reject: #isStub) do: [ :sc |
 			classes at: sc ifAbsentPut: Set new ] ].
-	
+
 
 	^ classes
 ]

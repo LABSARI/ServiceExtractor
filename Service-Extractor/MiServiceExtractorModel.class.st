@@ -6,11 +6,19 @@ Class {
 		'extractionDictionary',
 		'elementIndex',
 		'methodToExtract',
-		'uccg'
+		'uccg',
+		'extractions'
 	],
-	#category : 'Service-Extractor',
-	#package : 'Service-Extractor'
+	#category : 'Service-Extractor-Browser',
+	#package : 'Service-Extractor',
+	#tag : 'Browser'
 }
+
+{ #category : 'adding' }
+MiServiceExtractorModel >> addExtraction: anExtraction [
+
+	extractions add: anExtraction
+]
 
 { #category : 'accessing' }
 MiServiceExtractorModel >> buildCallGraph [
@@ -64,6 +72,25 @@ MiServiceExtractorModel >> extractionDictionary [
 				  at: m
 				  put: (ServiceExtractor extractMethod: m) ].
 		  extractionDictionary ]
+]
+
+{ #category : 'accessing' }
+MiServiceExtractorModel >> extractions [
+
+	^ extractions
+]
+
+{ #category : 'accessing' }
+MiServiceExtractorModel >> extractions: anObject [
+
+	extractions := anObject
+]
+
+{ #category : 'initialization' }
+MiServiceExtractorModel >> initialize [
+
+	super initialize.
+	extractions := OrderedCollection new.
 ]
 
 { #category : 'accessing' }
