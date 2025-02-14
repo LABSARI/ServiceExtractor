@@ -106,6 +106,46 @@ MiServiceExtractorBuilder >> colorForMethod: method in: anExtraction [
 ]
 
 { #category : 'building' }
+MiServiceExtractorBuilder >> highlightable [
+
+	^ highlightable ifNil: [ 
+		  highlightable := RSHighlightable new
+			                   highlightShapes: [ :shape | 
+				                   | list |
+				                   list := shape connectedLines copy.
+				                   list add: (shape propertyAt: #background).
+				                   list ];
+			                   when: RSHighlightEvent do: [ :evt | 
+				                   evt shape isNode
+					                   ifTrue: [ 
+						                   highlightable
+							                   record: evt shape
+							                   selector: #border
+							                   value: (RSBorder new
+									                    color: (Color fromHexString: 'FF7F00');
+									                    width: 3;
+									                    yourself) ]
+					                   ifFalse: [ 
+					                   highlightable
+						                   record: evt shape
+						                   selector: #color
+						                   value: Color red ] ]
+			                   for: self;
+			                   when: RSUnHighlightEvent do: [ :evt | 
+				                   evt shape isNode
+					                   ifTrue: [ 
+					                   highlightable
+						                   restore: evt shape
+						                   selector: #border ]
+					                   ifFalse: [ 
+					                   highlightable
+						                   restore: evt shape
+						                   selector: #color ] ]
+			                   for: self;
+			                   yourself ]
+]
+
+{ #category : 'building' }
 MiServiceExtractorBuilder >> highlightableLinkedShapes [
 
 	^ highlightShapes ifNil: [ 
@@ -176,16 +216,15 @@ MiServiceExtractorBuilder >> renderIn: aCanvas [
 		 s model notNil and: [
 			 s model class = HNode and: [
 				 s model rawModel isMooseObject and: [ s model rawModel isMethod ] ] ] ])
-		do: [ :s |
-			s
-				when: RSMouseClick
+		do: [ :s | "s
+				when: RSMouseLeftClick
 				do: [ :e |
 					MiInspectorBrowser inspect:
 						(uccg entryPointsUsing: e shape model) ]
-				for: self.
-
+				for: self."
 			(dup at: s model rawModel) size > 1 ifTrue: [
-				(s propertyAt: #background) color: Color red ] ].
+				(s propertyAt: #background) color: Color red.
+				(s parent parent propertyAt: #background) color: Color red ] ].
 	aCanvas lines do: #update.
 	aCanvas signalUpdate.
 	aCanvas zoomToFit

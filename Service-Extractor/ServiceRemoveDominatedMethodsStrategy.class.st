@@ -11,5 +11,6 @@ ServiceRemoveDominatedMethodsStrategy >> methodsToRemove [
 
 	| removedMethods |
 	removedMethods := simulation dominatedMethods.
+	removedMethods addAll: simulation currentExtraction extractedMethods.
 	^ removedMethods
 ]

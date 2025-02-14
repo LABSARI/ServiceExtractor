@@ -39,6 +39,12 @@ ServiceExtractorSimulation >> allExtractedMethods: anObject [
 	allExtractedMethods := anObject
 ]
 
+{ #category : 'computing' }
+ServiceExtractorSimulation >> allRemovedMethods [
+
+	^ removedMethods 
+]
+
 { #category : 'accessing' }
 ServiceExtractorSimulation >> codeRemovalStrategy [
 
@@ -61,7 +67,11 @@ ServiceExtractorSimulation >> currentExtraction [
 { #category : 'accessing' }
 ServiceExtractorSimulation >> dominatedMethods [
 	"Should we compute domination analysis at each increment? Because some methods are removed and the domination could change."
-
+	
+	uccg methodsToIgnore: removedMethods asSet.
+	('Iteration ', (previousExtractions size +1) asString, ' ', removedMethods size asString) traceCr.
+	uccg computeLTDominators.
+	uccg computeDominatorTree.
 	^ uccg dominatedMethodsFromMethods:
 		  currentExtraction extractedMethods
 ]
@@ -94,6 +104,7 @@ ServiceExtractorSimulation >> entryMethods: anObject [
 { #category : 'computing' }
 ServiceExtractorSimulation >> executeSimulation [
 
+	uccg methodsToIgnore: Set new.
 	[ self migrationIsOver ] whileFalse: [ 
 		self extractNextService
 	 ]
@@ -136,7 +147,7 @@ ServiceExtractorSimulation >> initialize [
 
 	super initialize.
 	previousExtractions := OrderedCollection new.
-	removedMethods := OrderedCollection new.
+	removedMethods := Set new.
 	allExtractedMethods := OrderedCollection new
 ]
 
