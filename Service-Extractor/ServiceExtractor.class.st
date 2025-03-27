@@ -220,7 +220,7 @@ ServiceExtractor >> extractFromCallGraphCHA [
 			lvType := lv declaredType.
 			self collectDependenciesOf: lvType in: classes ].
 
-		m parentType isInterface ifFalse: [
+		m parentType isClass ifTrue: [
 			m overriddenMethod ifNotNil: [
 				classes
 					at: m overriddenMethod parentType
