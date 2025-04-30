@@ -25,33 +25,91 @@ MiServiceExtractorBuilder >> buildClassNodeFromAssoc: assoc from: anExtraction [
 	node := HNode new
 		        rawModel: assoc key;
 		        name: assoc key name;
-		        expand;
+		        collapse;
 		        addAll: (methods collect: [ :m |
 					         self buildNodeFromMethod: m from: anExtraction ]);
 		        yourself.
+	node color: (self colorForClassNode: node).
 	^ node
 ]
 
 { #category : 'building' }
 MiServiceExtractorBuilder >> buildNodeFromExtraction: anExtraction [
 
-	| node dict |
+	| node dict classNodes presenterNode logicNode dataNode utilityNode |
 	node := HNode new
 		        rawModel: anExtraction;
 		        name:
 			        'Extraction '
 			        , (mapModel extractions indexOf: anExtraction) asString;
-		        expand;
-		        addAll: (anExtraction classes associations collect: [ :a |
-					         self buildClassNodeFromAssoc: a from: anExtraction ]);
 		        style: (HBorderAndTitleStyle new
 				         borderWidth: 2;
 				         borderDashArray: #( 4 );
 				         yourself);
+		        layout: RSVerticalLineLayout new;
 		        color: Color transparent;
 		        yourself.
+
+
+	classNodes := anExtraction value associations collect: [ :a |
+		              self buildClassNodeFromAssoc: a from: anExtraction ].
+	presenterNode := HNode new
+		                 name: 'Presentation tier';
+		                 style: (HBorderAndTitleStyle new
+				                  borderWidth: 2;
+				                  borderDashArray: #( 4 );
+				                  yourself);
+		                 color: Color transparent;
+		                 yourself.
+	logicNode := HNode new
+		             name: 'Logic tier';
+		             style: (HBorderAndTitleStyle new
+				              borderWidth: 2;
+				              borderDashArray: #( 4 );
+				              yourself);
+		             color: Color transparent;
+		             yourself.
+	dataNode := HNode new
+		            name: 'Data tier';
+		            style: (HBorderAndTitleStyle new
+				             borderWidth: 2;
+				             borderDashArray: #( 4 );
+				             yourself);
+		            color: Color transparent;
+		            yourself.
+	utilityNode := HNode new
+		               name: 'Utility tier';
+		               style: (HBorderAndTitleStyle new
+				                borderWidth: 2;
+				                borderDashArray: #( 4 );
+				                yourself);
+		               color: Color transparent;
+		               yourself.
+	classNodes do: [ :cn |
+		| classified |
+		classified := false.
+		(cn rawModel name beginsWith: 'Uc') ifTrue: [
+			presenterNode add: cn.
+			classified := true ].
+		(classified not and: [ cn rawModel name beginsWith: 'Service' ])
+			ifTrue: [
+				logicNode add: cn.
+				classified := true ].
+		(classified not and: [ cn rawModel name beginsWith: 'Dao' ])
+			ifTrue: [
+				dataNode add: cn.
+				classified := true ].
+		classified ifFalse: [ utilityNode add: cn ] ].
+
+	node addAll: {
+			presenterNode.
+			logicNode.
+			utilityNode.
+			dataNode }.
+
 	dict := Dictionary new.
-	(node allChildren select: [ :c | c rawModel isMethod ]) do: [ :hn |
+	(node allChildren select: [ :c |
+		 c rawModel isNotNil and: [ c rawModel isMethod ] ]) do: [ :hn |
 		dict at: hn rawModel put: hn ].
 
 	dict keysDo: [ :m |
@@ -90,13 +148,20 @@ MiServiceExtractorBuilder >> buildServices [
 ]
 
 { #category : 'building' }
+MiServiceExtractorBuilder >> colorForClassNode: classNode [
+
+	classNode children do: [ :c | c color = Color gray ifFalse: [ ^ c color ] ].
+	^ Color gray
+]
+
+{ #category : 'building' }
 MiServiceExtractorBuilder >> colorForMethod: method in: anExtraction [
 
 	| domMethods |
-	domMethods := anExtraction methodsToExtract flatCollectAsSet: [ :m |
+	domMethods := anExtraction key flatCollectAsSet: [ :m |
 		              uccg dominatedMethodsFrom: m ].
-
-	(anExtraction methodsToExtract includes: method) ifTrue: [
+	(uccg entryMethods includes: method) ifTrue: [ ^ Color pink ].
+	(anExtraction key includes: method) ifTrue: [
 		^ Color fromHexString: '4FA7E2' ].
 
 	(domMethods includes: method) ifTrue: [
@@ -211,7 +276,7 @@ MiServiceExtractorBuilder >> renderIn: aCanvas [
 					        s model rawModel isMooseObject and: [
 						        s model rawModel isMethod ] ] ] ]
 		        thenCollect: [ :e | e model rawModel ]) groupedBy: [ :a | a ].
-
+	
 	(aCanvas allChildren select: [ :s |
 		 s model notNil and: [
 			 s model class = HNode and: [

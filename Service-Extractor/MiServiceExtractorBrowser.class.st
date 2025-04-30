@@ -84,53 +84,34 @@ MiServiceExtractorBrowser >> buildDominatorTreeVisualization [
 { #category : 'actions' }
 MiServiceExtractorBrowser >> buildExtractionMap [
 
-	| methodsToExtract extraction builder |
-	
+	| methodsToExtract extraction builder mcg cmethods |
 	methodsToExtract := methodList selectedItems.
 	methodList selectItems: {  }.
 	methodList items: methodList items \ methodsToExtract.
-	extraction := ServiceExtractor new
-		              extractMethods: methodsToExtract;
-		              yourself.
+	methodsToExtract := (methodsToExtract flatCollect: [ :m | m methods ])
+		                    reject: #isNil.
+	mcg := uccg
+		       callGraphOfMethods: methodsToExtract
+		       in: uccg reverseCallGraph.
+	cmethods := (mcg keys , mcg values flatten) asSet.
+	extraction := methodsToExtract -> (cmethods groupedBy: #parentType).
+
+
+
 	self model addExtraction: extraction.
-	
-	
+
+
 	builder := MiServiceExtractorBuilder new
 		           mapModel: self model;
 		           container: canvas canvas;
 		           build;
 		           yourself
-	
-	"extractionShapes := extractions
-		                    collect: [ :e | self shapeForExtraction: e ]
-		                    as: RSGroup.
-	(RSHorizontalLineLayout withGap: 40) on: extractionShapes.
-	
-	lb := RSLabel text:
-		      'Number of duplicated methods: ' .
-	canvas canvas add: lb.
-	canvas canvas addAll: extractionShapes.
-	dup := (canvas canvas allChildren
-		        select: [ :s |
-		        s model isMooseObject and: [ s model isMethod ] ]
-		        thenCollect: #model) groupedBy: [ :a | a ].
-	
-	RSVerticalLineLayout new alignLeft on: {
-			lb.
-			extractionShapes }.
-	(canvas canvas allChildren select: [ :s |
-		 s model isMooseObject and: [ s model isMethod ] ]) do: [ :s |
-		(dup at: s model) size > 1  ifTrue: [
-			s color: Color red ] ].
-	canvas canvas lines do: #update.
-	canvas canvas signalUpdate.
-	canvas canvas zoomToFit"
 ]
 
 { #category : 'testing' }
 MiServiceExtractorBrowser >> canFollowEntity: anObject [
 
-	^ anObject asMooseGroup allSatisfy: [ :m | m isMethod ]
+	^ anObject asMooseGroup allSatisfy: [ :m | m isClass ]
 ]
 
 { #category : 'actions' }
@@ -154,7 +135,7 @@ MiServiceExtractorBrowser >> followEntity: anEntity [
 
 	| list |
 	list := anEntity asOrderedCollection.
-	list sort: [ :a :b | a parentType name < b parentType name ].
+	list sort: [ :a :b | a  name < b  name ].
 	methodList items: list.
 	specModel methodList: list.
 	specModel buildCallGraph.
@@ -172,7 +153,7 @@ MiServiceExtractorBrowser >> initializePresenters [
 
 	| sep |
 	methodList := (self instantiate: SpFilteringSelectableListPresenter)
-		              display: [ :i | i parentType name , '>>' , i name ].
+		              display: [ :i | i  name ].
 	submitButton := self newButton label: 'Submit'.
 	canvas := self newRoassal.
 	canvas canvas @ RSCanvasController.
