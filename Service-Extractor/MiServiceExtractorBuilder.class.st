@@ -36,17 +36,18 @@ MiServiceExtractorBuilder >> buildClassNodeFromAssoc: assoc from: anExtraction [
 { #category : 'building' }
 MiServiceExtractorBuilder >> buildNodeFromExtraction: anExtraction [
 
-	| node dict classNodes presenterNode logicNode dataNode utilityNode |
+	| node dict classNodes presenterNode logicNode dataNode utilityNode eps cgeps ed cgm meths cmg om oms |
 	node := HNode new
 		        rawModel: anExtraction;
-		        name:
-			        'Extraction '
-			        , (mapModel extractions indexOf: anExtraction) asString;
+		        name: 'Monolith';
 		        style: (HBorderAndTitleStyle new
 				         borderWidth: 2;
 				         borderDashArray: #( 4 );
 				         yourself);
-		        layout: RSVerticalLineLayout new;
+		        layout: (RSHorizontalLineLayout new
+				         gapSize: 50;
+				         alignMiddle;
+				         yourself);
 		        color: Color transparent;
 		        yourself.
 
@@ -70,7 +71,7 @@ MiServiceExtractorBuilder >> buildNodeFromExtraction: anExtraction [
 		             color: Color transparent;
 		             yourself.
 	dataNode := HNode new
-		            name: 'Data tier';
+		            name: 'Microservice';
 		            style: (HBorderAndTitleStyle new
 				             borderWidth: 2;
 				             borderDashArray: #( 4 );
@@ -104,11 +105,41 @@ MiServiceExtractorBuilder >> buildNodeFromExtraction: anExtraction [
 	node addAll: {
 			presenterNode.
 			logicNode.
-			utilityNode.
-			dataNode }.
+			utilityNode }.
+
+	ed := (presenterNode allChildren collect: #rawModel) select:
+		      #isMethod.
+	cgm := uccg callGraphOfMethods: ed.
+
+	meths := cgm keys , cgm values flatten reject: [ :m |
+		         m name = 'toString' ].
+
+	om := (meths difference:
+		       ((presenterNode allChildren collect: #rawModel) select:
+			        #isMethod)
+		       ,
+		       ((logicNode allChildren collect: #rawModel) select: #isMethod)
+		       ,
+		       ((utilityNode allChildren collect: #rawModel) select:
+			        #isMethod)) collect: [ :m |
+		      HNode new
+			      name: m name;
+			      rawModel: m;
+			      collapse;
+			      yourself ].
+	oms := HNode new
+		        rawModel: anExtraction;
+		        name: 'Other methods';
+		        style: (HBorderAndTitleStyle new
+				         borderWidth: 2;
+				         borderDashArray: #( 4 );
+				         yourself);
+		        color: Color white;
+		        yourself.
+	oms addAll: om.
 
 	dict := Dictionary new.
-	(node allChildren select: [ :c |
+	(node allChildren , dataNode allChildren, oms allChildren select: [ :c |
 		 c rawModel isNotNil and: [ c rawModel isMethod ] ]) do: [ :hn |
 		dict at: hn rawModel put: hn ].
 
@@ -119,7 +150,11 @@ MiServiceExtractorBuilder >> buildNodeFromExtraction: anExtraction [
 
 
 
-	^ node
+
+
+	rootNode add: node.
+	rootNode add: dataNode.
+	rootNode add: oms
 ]
 
 { #category : 'building' }
@@ -144,14 +179,14 @@ MiServiceExtractorBuilder >> buildServices [
 	nodes := self mapModel extractions collect: [ :e |
 		self buildNodeFromExtraction: e
 	].
-	rootNode addAll: nodes.
+	"rootNode addAll: nodes."
 ]
 
 { #category : 'building' }
 MiServiceExtractorBuilder >> colorForClassNode: classNode [
 
 	classNode children do: [ :c | c color = Color gray ifFalse: [ ^ c color ] ].
-	^ Color gray
+	^ Color lightGray 
 ]
 
 { #category : 'building' }
@@ -262,6 +297,18 @@ MiServiceExtractorBuilder >> nodeAnnouncer [
 		            @ HResizeParentWhenChildMoves new;
 		            yourself.
 	^ baseNode announcer
+]
+
+{ #category : 'rendering' }
+MiServiceExtractorBuilder >> relayout: aGroupOfShapes parent: shape [
+
+	shape layout ifNil: [
+		RSHorizontalLineLayout new
+			alignMiddle;
+			gapSize: 50;
+			on: aGroupOfShapes.
+		^ self ].
+	shape layout on: aGroupOfShapes
 ]
 
 { #category : 'rendering' }
