@@ -108,6 +108,19 @@ ServiceExtractor >> extractCHA [
 ]
 
 { #category : 'extraction' }
+ServiceExtractor >> extractClass: aClass [
+
+	^ self extractClasses: aClass asCollection
+]
+
+{ #category : 'extraction' }
+ServiceExtractor >> extractClasses: classesToExtract [
+
+	^ self extractMethods: (classesToExtract flatCollect: [ :c | c methods ]).
+	
+]
+
+{ #category : 'extraction' }
 ServiceExtractor >> extractCode [
 
 	FAMIX2JavaVisitor new
@@ -139,8 +152,7 @@ ServiceExtractor >> extractFromCallGraph [
 
 	| cgMethods  cgm |
 	cgm := JavaCallGraphModel new
-		       entryMethod: self methodToExtract;
-		       yourself.
+		       entryMethods: {self methodToExtract}.
 	callGraph := self methodToExtract callGraph.
 
 	classes := Dictionary new.
@@ -199,7 +211,7 @@ ServiceExtractor >> extractFromCallGraphCHA [
 	| cgMethods |
 	callGraph := uccg callGraphOfMethods: self methodsToExtract.
 
-	classes := Dictionary new.
+
 	cgMethods := Set withAll: methodsToExtract.
 	cgMethods addAll:
 		(callGraph associations flatCollectAsSet: [ :a | a value ]).
@@ -235,7 +247,10 @@ ServiceExtractor >> extractFromCallGraphCHA [
 		attributes do: [ :a |
 			a incomingAccesses do: [ :access |
 				(access isWrite and: [ access accessor name = '<Initializer>' ])
-					ifTrue: [ (classes at: class) add: access accessor ] ] ] ].
+					ifTrue: [ (classes at: class) add: access accessor ] ] ].
+
+		(m allExceptions reject: #isStub) do: [ :exception |
+			classes at: exception ifAbsentPut: [ Set new ] ] ].
 
 
 	"cgm stubMethods do: [ :sm |
@@ -281,6 +296,13 @@ ServiceExtractor >> extractPath [
 ServiceExtractor >> extractPath: anObject [
 
 	extractPath := anObject
+]
+
+{ #category : 'extraction' }
+ServiceExtractor >> initialize [
+
+	super initialize.
+	classes := Dictionary new.
 ]
 
 { #category : 'accessing' }

@@ -51,9 +51,9 @@ MiServiceExtractorBuilder >> buildNodeFromExtraction: anExtraction [
 		        color: Color transparent;
 		        yourself.
 
-
 	classNodes := anExtraction value associations collect: [ :a |
 		              self buildClassNodeFromAssoc: a from: anExtraction ].
+	
 	presenterNode := HNode new
 		                 name: 'Presentation tier';
 		                 style: (HBorderAndTitleStyle new
@@ -107,12 +107,11 @@ MiServiceExtractorBuilder >> buildNodeFromExtraction: anExtraction [
 			logicNode.
 			utilityNode }.
 
-	ed := (presenterNode allChildren collect: #rawModel) select:
-		      #isMethod.
+	ed := (logicNode allChildren collect: #rawModel) select: #isMethod.
 	cgm := uccg callGraphOfMethods: ed.
 
-	meths := cgm keys , cgm values flatten reject: [ :m |
-		         m name = 'toString' ].
+	meths := (cgm keys , cgm values flatten reject: [ :m |
+		          m name = 'toString' ]) asSet.
 
 	om := (meths difference:
 		       ((presenterNode allChildren collect: #rawModel) select:
@@ -121,26 +120,29 @@ MiServiceExtractorBuilder >> buildNodeFromExtraction: anExtraction [
 		       ((logicNode allChildren collect: #rawModel) select: #isMethod)
 		       ,
 		       ((utilityNode allChildren collect: #rawModel) select:
-			        #isMethod)) collect: [ :m |
-		      HNode new
-			      name: m name;
-			      rawModel: m;
-			      collapse;
-			      yourself ].
+			        #isMethod)
+		       ,
+		       ((dataNode allChildren collect: #rawModel) select: #isMethod))
+		      collect: [ :m |
+			      HNode new
+				      name: m name;
+				      rawModel: m;
+				      collapse;
+				      yourself ].
 	oms := HNode new
-		        rawModel: anExtraction;
-		        name: 'Other methods';
-		        style: (HBorderAndTitleStyle new
-				         borderWidth: 2;
-				         borderDashArray: #( 4 );
-				         yourself);
-		        color: Color white;
-		        yourself.
+		       rawModel: anExtraction;
+		       name: 'Other methods';
+		       style: (HBorderAndTitleStyle new
+				        borderWidth: 2;
+				        borderDashArray: #( 4 );
+				        yourself);
+		       color: Color white;
+		       yourself.
 	oms addAll: om.
 
 	dict := Dictionary new.
-	(node allChildren , dataNode allChildren, oms allChildren select: [ :c |
-		 c rawModel isNotNil and: [ c rawModel isMethod ] ]) do: [ :hn |
+	(node allChildren , dataNode allChildren , oms allChildren select: [
+		 :c | c rawModel isNotNil and: [ c rawModel isMethod ] ]) do: [ :hn |
 		dict at: hn rawModel put: hn ].
 
 	dict keysDo: [ :m |
