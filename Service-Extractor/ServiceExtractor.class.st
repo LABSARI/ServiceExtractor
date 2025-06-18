@@ -211,7 +211,6 @@ ServiceExtractor >> extractFromCallGraphCHA [
 	| cgMethods |
 	callGraph := uccg callGraphOfMethods: self methodsToExtract.
 
-
 	cgMethods := Set withAll: methodsToExtract.
 	cgMethods addAll:
 		(callGraph associations flatCollectAsSet: [ :a | a value ]).
@@ -274,8 +273,8 @@ ServiceExtractor >> extractFromCallGraphCHA [
 	classes keysDo: [ :c |
 		(c superclassHierarchy reject: #isStub) do: [ :sc |
 			classes at: sc ifAbsentPut: Set new ] ].
-
-
+	
+	classes keys do: [ :k | k isStub ifTrue: [ classes removeKey: k ] ].
 	^ classes
 ]
 
