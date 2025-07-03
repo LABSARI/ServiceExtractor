@@ -2,7 +2,10 @@ Class {
 	#name : 'MiServiceExtractorBuilder',
 	#superclass : 'HSimpleVisualizationBuilder',
 	#instVars : [
-		'highlightShapes'
+		'highlightShapes',
+		'layerColor',
+		'domMethods',
+		'monolithNode'
 	],
 	#category : 'Service-Extractor-Browser',
 	#package : 'Service-Extractor',
@@ -12,7 +15,10 @@ Class {
 { #category : 'building' }
 MiServiceExtractorBuilder >> build [
 
+	rootNode := HNode new.
+	rootNode layout: (RSHorizontalLineLayout new horizontalGap: 200).
 	self buildServices.
+	self buildMonolith.
 	super build
 ]
 
@@ -24,7 +30,8 @@ MiServiceExtractorBuilder >> buildClassNodeFromAssoc: assoc from: anExtraction [
 		           m name = '<Initializer>' ].
 	node := HNode new
 		        rawModel: assoc key;
-		        name: assoc key name;
+		        name: assoc key name , ' ' , methods size asString , '/'
+			        , assoc key methods size asString;
 		        expand;
 		        addAll: (methods collect: [ :m |
 					         self buildNodeFromMethod: m from: anExtraction ]);
@@ -33,33 +40,54 @@ MiServiceExtractorBuilder >> buildClassNodeFromAssoc: assoc from: anExtraction [
 ]
 
 { #category : 'building' }
+MiServiceExtractorBuilder >> buildMonolith [
+
+	monolithNode := HNode new
+		                name: 'Monolith';
+		                expand;
+		                style: (HBorderAndTitleStyle new
+				                 borderWidth: 2;
+				                 borderDashArray: #( 1 );
+				                 yourself);
+		                color: ((Color fromHexString: 'DEDEDE') alpha: 0.2);
+		                yourself.
+	rootNode add: monolithNode
+]
+
+{ #category : 'building' }
 MiServiceExtractorBuilder >> buildNodeFromExtraction: anExtraction [
 
 	| node dict |
+	self setDominatedMethodsFrom: anExtraction.
 	node := HNode new
 		        rawModel: anExtraction;
 		        name:
 			        'Extraction '
-			        , (mapModel extractions indexOf: anExtraction) asString;
+			        , (mapModel extractions indexOf: anExtraction) asString
+			        , String cr , 'Number of classes: '
+			        , anExtraction classes keys size asString , String cr
+			        , 'Number of methods: '
+			        ,
+				        (anExtraction classes values flatten collect: #isMethod)
+					        size asString;
 		        expand;
-		        addAll: (anExtraction classes associations collect: [ :a |
-					         self buildClassNodeFromAssoc: a from: anExtraction ]);
+		        addAll: (self createLayersFrom: anExtraction);
 		        style: (HBorderAndTitleStyle new
 				         borderWidth: 2;
-				         borderDashArray: #( 4 );
+				         borderDashArray: #( 1 );
 				         yourself);
-		        color: Color transparent;
+		        color: ((Color fromHexString: 'DEDEDE') alpha: 0.2);
+		        layout: (RSHorizontalLineLayout new alignMiddle; horizontalGap: 100);
 		        yourself.
 	dict := Dictionary new.
-	(node allChildren select: [ :c | c rawModel isMethod ]) do: [ :hn |
+	(node allChildren select: [ :c |
+		 c rawModel isMooseObject and: [ c rawModel isMethod ] ]) do: [ :hn |
 		dict at: hn rawModel put: hn ].
 
 	dict keysDo: [ :m |
 		mapModel uccg callGraph at: m ifPresent: [ :c |
 			c do: [ :mm |
 				dict at: mm ifPresent: [ :hn | (dict at: m) dependencyTo: hn ] ] ] ].
-
-
 
 	^ node
 ]
@@ -81,8 +109,6 @@ MiServiceExtractorBuilder >> buildNodeFromMethod: method from: anExtraction [
 MiServiceExtractorBuilder >> buildServices [
 
 	| nodes |
-	rootNode := HNode new.
-
 	nodes := self mapModel extractions collect: [ :e |
 		self buildNodeFromExtraction: e
 	].
@@ -90,11 +116,15 @@ MiServiceExtractorBuilder >> buildServices [
 ]
 
 { #category : 'building' }
+MiServiceExtractorBuilder >> colorForLayer: aSymbol [
+
+	^ layerColor at: aSymbol 
+]
+
+{ #category : 'building' }
 MiServiceExtractorBuilder >> colorForMethod: method in: anExtraction [
 
-	| domMethods |
-	domMethods := anExtraction methodsToExtract flatCollectAsSet: [ :m |
-		              uccg dominatedMethodsFrom: m ].
+	
 
 	(anExtraction methodsToExtract includes: method) ifTrue: [
 		^ Color fromHexString: '4FA7E2' ].
@@ -103,6 +133,47 @@ MiServiceExtractorBuilder >> colorForMethod: method in: anExtraction [
 		^ Color fromHexString: '058B71' ].
 
 	^ Color gray
+]
+
+{ #category : 'building' }
+MiServiceExtractorBuilder >> createLayersFrom: anExtraction [
+
+	| classNodes groups groupNodes |
+	classNodes := (anExtraction classes associations reject: [ :a |
+		               a key isInterface ]) collect: [ :a |
+		              self buildClassNodeFromAssoc: a from: anExtraction ].
+
+	groups := classNodes groupedBy: [ :cn | self layerOf: cn ].
+	groupNodes := groups associations collect: [ :assoc |
+		              | layer nodes layerNode |
+		              layer := assoc key.
+		              nodes := assoc value.
+		              layerNode := HNode new
+			                           rawModel: layer;
+			                           name: layer asString;
+			                           color: (self colorForLayer: layer);
+			                           expand;
+			                           addAll: nodes;
+			                           style: (HBorderAndTitleStyle new
+					                            borderWidth: 2;
+					                            borderDashArray: #( 4 );
+					                            yourself);
+			                           yourself ].
+	^ {
+		  (groupNodes detect: [ :gn | gn rawModel = #transverse ]).
+		  (HNode new
+			   rawModel: #layers;
+			   expand;
+			   addAll:
+				   ((groupNodes reject: [ :gn | gn rawModel = #transverse ])
+					    sort: [ :a :b | a rawModel > b rawModel ]);
+			   style: (HBorderAndTitleStyle new
+					    borderWidth: 0;
+					    borderDashArray: #( 4 );
+					    yourself);
+			   layout: (RSVerticalLineLayout new alignCenter; verticalGap: 150);
+			   color: Color transparent;
+			   yourself) }
 ]
 
 { #category : 'building' }
@@ -180,6 +251,49 @@ MiServiceExtractorBuilder >> highlightableLinkedShapes [
 ]
 
 { #category : 'building' }
+MiServiceExtractorBuilder >> initialize [
+
+	super initialize.
+	layerColor := {
+		              (#transverse
+		               -> ((Color fromHexString: '9B59B6') alpha: 0.2)).
+		              (#logic
+		               -> ((Color fromHexString: 'E67E22') alpha: 0.2)).
+		              (#data -> ((Color fromHexString: 'C0392B') alpha: 0.3)).
+		              (#presentation
+		               -> ((Color fromHexString: '16A085') alpha: 0.2)) }
+		              asDictionary
+]
+
+{ #category : 'building' }
+MiServiceExtractorBuilder >> layerOf: anHNode [
+
+	((anHNode rawModel name beginsWith: 'Uc') or: [
+		 anHNode rawModel name beginsWith: 'IUc' ]) ifTrue: [
+		^ #presentation ].
+	((anHNode rawModel name beginsWith: 'Service') or: [
+		 anHNode rawModel name beginsWith: 'IService' ]) ifTrue: [ ^ #logic ].
+	((anHNode rawModel name beginsWith: 'Dao') or: [
+		 anHNode rawModel name beginsWith: 'IDao' ]) ifTrue: [ ^ #data ].
+	^ #transverse
+]
+
+{ #category : 'accessing - attributes' }
+MiServiceExtractorBuilder >> menuItemStrategy [
+
+	^ MiServiceExtractorMenuItemStrategy new
+]
+
+{ #category : 'computing' }
+MiServiceExtractorBuilder >> moveClassToMonolith: anHNode [
+
+	anHNode moveTo: monolithNode.
+	self container lines do: [ :l |
+		l from model nodeParent ~= l to model nodeParent ifTrue: [
+			l color: Color red ] ]
+]
+
+{ #category : 'building' }
 MiServiceExtractorBuilder >> nodeAnnouncer [
 	"plug new events here"
 
@@ -228,4 +342,11 @@ MiServiceExtractorBuilder >> renderIn: aCanvas [
 	aCanvas lines do: #update.
 	aCanvas signalUpdate.
 	aCanvas zoomToFit
+]
+
+{ #category : 'building' }
+MiServiceExtractorBuilder >> setDominatedMethodsFrom: anExtraction [
+
+	domMethods := uccg dominatedMethodsFromMethods:
+		              anExtraction methodsToExtract
 ]

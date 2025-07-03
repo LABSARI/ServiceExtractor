@@ -243,8 +243,8 @@ ServiceExtractor >> extractFromCallGraphCHA [
 			cla := r isClass ifTrue: [ r ] ifFalse: [ r declaredType ].
 			cla allSubclassesAndImplementations do: [ :ci |
 			classes at: ci ifAbsentPut: Set new ] ]]."
-
-	classes keysDo: [ :c |
+	classes removeKey: nil ifAbsent: [  ].
+	(classes keys reject: #isNil) do: [ :c |
 		(classes at: c) ifNotEmpty: [
 			c methods do: [ :m |
 				m isConstructor ifTrue: [ (classes at: c) add: m ] ] ] ].
@@ -256,7 +256,7 @@ ServiceExtractor >> extractFromCallGraphCHA [
 				 e declaredType isClass and: [ e declaredType isStub not ] ])
 				ifTrue: [ classes at: e declaredType ifAbsentPut: [ Set new ] ] ] ].
 
-	classes keysDo: [ :c |
+	(classes keys reject: #isNil) do: [ :c |
 		(c superclassHierarchy reject: #isStub) do: [ :sc |
 			classes at: sc ifAbsentPut: Set new ] ].
 

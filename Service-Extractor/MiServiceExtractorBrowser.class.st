@@ -130,7 +130,8 @@ MiServiceExtractorBrowser >> buildExtractionMap [
 { #category : 'testing' }
 MiServiceExtractorBrowser >> canFollowEntity: anObject [
 
-	^ anObject asMooseGroup allSatisfy: [ :m | m isMethod ]
+	^ (anObject asMooseGroup allSatisfy: [ :m | m isMethod ]) or: [
+		  anObject asMooseGroup allSatisfy: [ :m | m isClass ] ]
 ]
 
 { #category : 'actions' }
@@ -153,11 +154,14 @@ MiServiceExtractorBrowser >> connectPresenters [
 MiServiceExtractorBrowser >> followEntity: anEntity [
 
 	| list |
-	list := anEntity asOrderedCollection.
+	list := anEntity anyOne isClass
+		        ifTrue: [
+		        (anEntity flatCollect: #methods) asOrderedCollection ]
+		        ifFalse: [ anEntity asOrderedCollection ].
 	list sort: [ :a :b | a parentType name < b parentType name ].
 	methodList items: list.
 	specModel methodList: list.
-	specModel buildCallGraph.
+	specModel buildCallGraph
 ]
 
 { #category : 'initialization' }
