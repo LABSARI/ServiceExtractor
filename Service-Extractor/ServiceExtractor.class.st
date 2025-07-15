@@ -8,7 +8,8 @@ Class {
 		'callGraph',
 		'classes',
 		'extractPath',
-		'methodsToExtract'
+		'methodsToExtract',
+		'methods'
 	],
 	#category : 'Service-Extractor-Extractor',
 	#package : 'Service-Extractor',
@@ -27,6 +28,14 @@ ServiceExtractor class >> extractMethods: aCollectionOfMethods [
 
 	^ self new
 		  extractMethods: aCollectionOfMethods
+]
+
+{ #category : 'enumerating' }
+ServiceExtractor >> allMethods [
+
+	^ methods ifNil: [
+		  methods := ((classes values flatten select: #isMethod) reject: [ :m |
+			             m name = '<Initializer>' ]) asSet ]
 ]
 
 { #category : 'extraction' }
