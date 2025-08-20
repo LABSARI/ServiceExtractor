@@ -5,7 +5,8 @@ Class {
 		'highlightShapes',
 		'layerColor',
 		'domMethods',
-		'monolithNode'
+		'monolithNode',
+		'solution'
 	],
 	#category : 'Service-Extractor-Browser',
 	#package : 'Service-Extractor',
@@ -13,12 +14,45 @@ Class {
 }
 
 { #category : 'building' }
+MiServiceExtractorBuilder >> addMonolithChildrenFromSolution [
+
+	| list modal |
+	list := SpFilteringListPresenter new
+		        items: (population sort: [ :a :b |
+					         a objectivesVector first < b objectivesVector first ]);
+		        display: [ :s |
+			        'Cohesion:' , s objectivesVector first asString
+			        , ' | Nb Calls: ' , s objectivesVector second asString
+			        , ' | dup: ' , (s genes count: [ :g | g = 2 ]) asString ];
+		        yourself.
+
+	modal := list asModalWindow.
+	modal title:
+		'Select a solution (' , population anyOne candidateMethods size asString
+		, ' methods)'.
+	modal okAction: [ solution := list selectedItem ].
+	modal open.
+	solution ifNil: [ ^ self ].
+	(solution methodsInMonolith groupedBy: #parentType) associationsDo: [
+		:assoc |
+		monolithNode add: (HNode new
+				 rawModel: assoc key;
+				 name: assoc key name , ' ' , assoc value size asString , '/'
+					 , assoc key methods size asString;
+				 expand;
+				 addAll:
+					 (assoc value collect: [ :m | self buildNodeFromMethod: m ]);
+				 yourself) ]
+]
+
+{ #category : 'building' }
 MiServiceExtractorBuilder >> build [
 
 	rootNode := HNode new.
 	rootNode layout: (RSHorizontalLineLayout new horizontalGap: 200).
-	self buildServices.
 	self buildMonolith.
+	self buildServices.
+	
 	super build
 ]
 
@@ -27,7 +61,8 @@ MiServiceExtractorBuilder >> buildClassNodeFromAssoc: assoc from: anExtraction [
 
 	| node methods |
 	methods := (assoc value select: #isMethod) reject: [ :m |
-		           m name = '<Initializer>' ].
+		           m name = '<Initializer>' or: [
+			           solution methodsInMonolith includes: m ] ].
 	node := HNode new
 		        rawModel: assoc key;
 		        name: assoc key name , ' ' , methods size asString , '/'
@@ -51,6 +86,7 @@ MiServiceExtractorBuilder >> buildMonolith [
 				                 yourself);
 		                color: ((Color fromHexString: 'DEDEDE') alpha: 0.2);
 		                yourself.
+	self addMonolithChildrenFromSolution.
 	rootNode add: monolithNode
 ]
 
@@ -77,10 +113,12 @@ MiServiceExtractorBuilder >> buildNodeFromExtraction: anExtraction [
 				         borderDashArray: #( 1 );
 				         yourself);
 		        color: ((Color fromHexString: 'DEDEDE') alpha: 0.2);
-		        layout: (RSHorizontalLineLayout new alignMiddle; horizontalGap: 100);
+		        layout: (RSHorizontalLineLayout new
+				         alignMiddle;
+				         horizontalGap: 100);
 		        yourself.
 	dict := Dictionary new.
-	(node allChildren select: [ :c |
+	(node allChildren , monolithNode allChildren select: [ :c |
 		 c rawModel isMooseObject and: [ c rawModel isMethod ] ]) do: [ :hn |
 		dict at: hn rawModel put: hn ].
 
@@ -88,6 +126,20 @@ MiServiceExtractorBuilder >> buildNodeFromExtraction: anExtraction [
 		mapModel uccg callGraph at: m ifPresent: [ :c |
 			c do: [ :mm |
 				dict at: mm ifPresent: [ :hn | (dict at: m) dependencyTo: hn ] ] ] ].
+
+	^ node
+]
+
+{ #category : 'building' }
+MiServiceExtractorBuilder >> buildNodeFromMethod: method [
+
+	| node |
+	node := HNode new
+		        rawModel: method;
+		        name:
+			        method name , ': '
+			        , (uccg entryPointsUsing: method) size asString;
+		        yourself.
 
 	^ node
 ]
@@ -124,14 +176,14 @@ MiServiceExtractorBuilder >> colorForLayer: aSymbol [
 { #category : 'building' }
 MiServiceExtractorBuilder >> colorForMethod: method in: anExtraction [
 
-	
-
 	(anExtraction methodsToExtract includes: method) ifTrue: [
 		^ Color fromHexString: '4FA7E2' ].
 
 	(domMethods includes: method) ifTrue: [
 		^ Color fromHexString: '058B71' ].
 
+	(solution methodsDuplicated includes: method) ifTrue: [
+		^ Color orange ].
 	^ Color gray
 ]
 
@@ -142,7 +194,7 @@ MiServiceExtractorBuilder >> createLayersFrom: anExtraction [
 	classNodes := (anExtraction classes associations reject: [ :a |
 		               a key isInterface ]) collect: [ :a |
 		              self buildClassNodeFromAssoc: a from: anExtraction ].
-
+	classNodes := classNodes reject: [ :cn | cn children isEmpty ].
 	groups := classNodes groupedBy: [ :cn | self layerOf: cn ].
 	groupNodes := groups associations collect: [ :assoc |
 		              | layer nodes layerNode |
