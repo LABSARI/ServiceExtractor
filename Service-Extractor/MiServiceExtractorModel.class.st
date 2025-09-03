@@ -91,6 +91,7 @@ MiServiceExtractorModel >> initialize [
 
 	super initialize.
 	extractions := OrderedCollection new.
+	Smalltalk at: #allExtractions ifPresent: [ :e | extractions addAll: e ]
 ]
 
 { #category : 'accessing' }
@@ -126,7 +127,7 @@ MiServiceExtractorModel >> miSelectedItem [
 { #category : 'accessing' }
 MiServiceExtractorModel >> uccg [
 
-	^ uccg
+	^ Smalltalk at: #uccg
 ]
 
 { #category : 'accessing' }

@@ -80,7 +80,5 @@ FamixIncrementalMigrationGenerator >> defineRelations [
 	(increment property: #nextIncrement)
 	- (increment property: #previousIncrement).
 
-	(increment property: #service) - (service property: #increment).
-
-	(increment property: #monolith) - (monolith property: #increment)
+	(increment property: #service) - (service property: #increment)
 ]

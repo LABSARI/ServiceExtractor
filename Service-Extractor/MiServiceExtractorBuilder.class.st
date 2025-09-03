@@ -6,7 +6,8 @@ Class {
 		'layerColor',
 		'domMethods',
 		'monolithNode',
-		'solution'
+		'solution',
+		'validateButton'
 	],
 	#category : 'Service-Extractor-Browser',
 	#package : 'Service-Extractor',
@@ -16,25 +17,12 @@ Class {
 { #category : 'building' }
 MiServiceExtractorBuilder >> addMonolithChildrenFromSolution [
 
-	| list modal |
-	list := SpFilteringListPresenter new
-		        items: (population sort: [ :a :b |
-					         a objectivesVector first < b objectivesVector first ]);
-		        display: [ :s |
-			        'Cohesion:' , s objectivesVector first asString
-			        , ' | Nb Calls: ' , s objectivesVector second asString
-			        , ' | dup: ' , (s genes count: [ :g | g = 2 ]) asString ];
-		        yourself.
-
-	modal := list asModalWindow.
-	modal title:
-		'Select a solution (' , population anyOne candidateMethods size asString
-		, ' methods)'.
-	modal okAction: [ solution := list selectedItem ].
-	modal open.
-	solution ifNil: [ ^ self ].
-	(solution methodsInMonolith groupedBy: #parentType) associationsDo: [
-		:assoc |
+	| solutions |
+	solutions := self mapModel extractions collect: [ :assoc |
+		             assoc value ].
+	solutions ifEmpty: [ ^ self ].
+	((solutions flatCollectAsSet: [ :s | s methodsInMonolith ])
+		 groupedBy: #parentType) associationsDo: [ :assoc |
 		monolithNode add: (HNode new
 				 rawModel: assoc key;
 				 name: assoc key name , ' ' , assoc value size asString , '/'
@@ -52,6 +40,7 @@ MiServiceExtractorBuilder >> build [
 	rootNode layout: (RSHorizontalLineLayout new horizontalGap: 200).
 	self buildMonolith.
 	self buildServices.
+	self buildMenu.
 	
 	super build
 ]
@@ -72,6 +61,53 @@ MiServiceExtractorBuilder >> buildClassNodeFromAssoc: assoc from: anExtraction [
 					         self buildNodeFromMethod: m from: anExtraction ]);
 		        yourself.
 	^ node
+]
+
+{ #category : 'building' }
+MiServiceExtractorBuilder >> buildClassNodeFromAssoc: assoc from: anExtraction solution: aSolution [
+
+	| node methods |
+	methods := (assoc value select: #isMethod) reject: [ :m |
+		           m name = '<Initializer>' or: [
+			           aSolution methodsInMonolith includes: m ] ].
+	node := HNode new
+		        rawModel: assoc key;
+		        name: assoc key name , ' ' , methods size asString , '/'
+			        , assoc key methods size asString;
+		        expand;
+		        addAll: (methods collect: [ :m |
+					         self buildNodeFromMethod: m from: anExtraction solution: aSolution]);
+		        yourself.
+	^ node
+]
+
+{ #category : 'building' }
+MiServiceExtractorBuilder >> buildMenu [
+
+	validateButton := RSComposite new.
+	validateButton
+		add: (RSLabel new
+				 fontSize: 13;
+				 text: 'SAVE INCREMENT';
+				 color: Color black;
+				 yourself);
+		border: (RSBorder new
+				 color: (Color fromHexString: '88888899');
+				 yourself);
+		color: (Color fromHexString: 'AAAAAA33').
+	validateButton @ (RSHighlightable new
+		 highlightColor: (Color fromHexString: 'AAAAAA99');
+		 yourself).
+	validateButton
+		adjustToChildren;
+		padding: 5.
+	validateButton translateBy:
+		validateButton width / 2 + 10 @ (validateButton height / 2 + 10).
+	self container add: validateButton.
+
+	validateButton setAsFixed.
+
+	validateButton when: RSMouseClick do: [ self saveIncrement ] for: self
 ]
 
 { #category : 'building' }
@@ -131,6 +167,46 @@ MiServiceExtractorBuilder >> buildNodeFromExtraction: anExtraction [
 ]
 
 { #category : 'building' }
+MiServiceExtractorBuilder >> buildNodeFromExtraction: anExtraction solution: aSolution [
+
+	| node dict |
+	self setDominatedMethodsFrom: anExtraction.
+	node := HNode new
+		        rawModel: anExtraction;
+		        name:
+			        'Extraction '
+			        , (mapModel extractions indexOf: anExtraction) asString
+			        , String cr , 'Number of classes: '
+			        , anExtraction classes keys size asString , String cr
+			        , 'Number of methods: '
+			        ,
+				        (anExtraction classes values flatten collect: #isMethod)
+					        size asString;
+		        expand;
+		        addAll: (self createLayersFrom: anExtraction solution: aSolution);
+		        style: (HBorderAndTitleStyle new
+				         borderWidth: 2;
+				         borderDashArray: #( 1 );
+				         yourself);
+		        color: ((Color fromHexString: 'DEDEDE') alpha: 0.2);
+		        layout: (RSHorizontalLineLayout new
+				         alignMiddle;
+				         horizontalGap: 100);
+		        yourself.
+	dict := Dictionary new.
+	(node allChildren , monolithNode allChildren select: [ :c |
+		 c rawModel isMooseObject and: [ c rawModel isMethod ] ]) do: [ :hn |
+		dict at: hn rawModel put: hn ].
+
+	dict keysDo: [ :m |
+		mapModel uccg callGraph at: m ifPresent: [ :c |
+			c do: [ :mm |
+				dict at: mm ifPresent: [ :hn | (dict at: m) dependencyTo: hn ] ] ] ].
+
+	^ node
+]
+
+{ #category : 'building' }
 MiServiceExtractorBuilder >> buildNodeFromMethod: method [
 
 	| node |
@@ -158,11 +234,30 @@ MiServiceExtractorBuilder >> buildNodeFromMethod: method from: anExtraction [
 ]
 
 { #category : 'building' }
+MiServiceExtractorBuilder >> buildNodeFromMethod: method from: anExtraction solution: aSolution [
+
+	| node |
+	node := HNode new
+		        rawModel: method;
+		        name:
+			        method name , ': '
+			        , (uccg entryPointsUsing: method) size asString;
+		        color:
+			        (self
+				         colorForMethod: method
+				         in: anExtraction
+				         solution: aSolution);
+		        yourself.
+
+	^ node
+]
+
+{ #category : 'building' }
 MiServiceExtractorBuilder >> buildServices [
 
 	| nodes |
-	nodes := self mapModel extractions collect: [ :e |
-		self buildNodeFromExtraction: e
+	nodes := self mapModel extractions collect: [ :assoc  |
+		self buildNodeFromExtraction: assoc key solution: assoc value
 	].
 	rootNode addAll: nodes.
 ]
@@ -188,12 +283,67 @@ MiServiceExtractorBuilder >> colorForMethod: method in: anExtraction [
 ]
 
 { #category : 'building' }
+MiServiceExtractorBuilder >> colorForMethod: method in: anExtraction solution: aSolution [
+
+	(anExtraction methodsToExtract includes: method) ifTrue: [
+		^ Color fromHexString: '4FA7E2' ].
+
+	(domMethods includes: method) ifTrue: [
+		^ Color fromHexString: '058B71' ].
+
+	(aSolution methodsDuplicated includes: method) ifTrue: [
+		^ Color orange ].
+	^ Color gray
+]
+
+{ #category : 'building' }
 MiServiceExtractorBuilder >> createLayersFrom: anExtraction [
 
 	| classNodes groups groupNodes |
 	classNodes := (anExtraction classes associations reject: [ :a |
 		               a key isInterface ]) collect: [ :a |
 		              self buildClassNodeFromAssoc: a from: anExtraction ].
+	classNodes := classNodes reject: [ :cn | cn children isEmpty ].
+	groups := classNodes groupedBy: [ :cn | self layerOf: cn ].
+	groupNodes := groups associations collect: [ :assoc |
+		              | layer nodes layerNode |
+		              layer := assoc key.
+		              nodes := assoc value.
+		              layerNode := HNode new
+			                           rawModel: layer;
+			                           name: layer asString;
+			                           color: (self colorForLayer: layer);
+			                           expand;
+			                           addAll: nodes;
+			                           style: (HBorderAndTitleStyle new
+					                            borderWidth: 2;
+					                            borderDashArray: #( 4 );
+					                            yourself);
+			                           yourself ].
+	^ {
+		  (groupNodes detect: [ :gn | gn rawModel = #transverse ]).
+		  (HNode new
+			   rawModel: #layers;
+			   expand;
+			   addAll:
+				   ((groupNodes reject: [ :gn | gn rawModel = #transverse ])
+					    sort: [ :a :b | a rawModel > b rawModel ]);
+			   style: (HBorderAndTitleStyle new
+					    borderWidth: 0;
+					    borderDashArray: #( 4 );
+					    yourself);
+			   layout: (RSVerticalLineLayout new alignCenter; verticalGap: 150);
+			   color: Color transparent;
+			   yourself) }
+]
+
+{ #category : 'building' }
+MiServiceExtractorBuilder >> createLayersFrom: anExtraction solution: aSolution [
+
+	| classNodes groups groupNodes |
+	classNodes := (anExtraction classes associations reject: [ :a |
+		               a key isInterface ]) collect: [ :a |
+		              self buildClassNodeFromAssoc: a from: anExtraction solution: aSolution ].
 	classNodes := classNodes reject: [ :cn | cn children isEmpty ].
 	groups := classNodes groupedBy: [ :cn | self layerOf: cn ].
 	groupNodes := groups associations collect: [ :assoc |
@@ -370,7 +520,7 @@ MiServiceExtractorBuilder >> renderIn: aCanvas [
 
 	| dup |
 	super renderIn: aCanvas.
-	dup := (aCanvas canvas allChildren
+	"dup := (aCanvas canvas allChildren
 		        select: [ :s |
 			        s model notNil and: [
 				        s model class = HNode and: [
@@ -382,18 +532,26 @@ MiServiceExtractorBuilder >> renderIn: aCanvas [
 		 s model notNil and: [
 			 s model class = HNode and: [
 				 s model rawModel isMooseObject and: [ s model rawModel isMethod ] ] ] ])
-		do: [ :s | "s
+		do: [ :s | ""s
 				when: RSMouseLeftClick
 				do: [ :e |
 					MiInspectorBrowser inspect:
 						(uccg entryPointsUsing: e shape model) ]
-				for: self."
+				for: self.""
 			(dup at: s model rawModel) size > 1 ifTrue: [
 				(s propertyAt: #background) color: Color red.
-				(s parent parent propertyAt: #background) color: Color red ] ].
+				(s parent parent propertyAt: #background) color: Color red ] ]."
 	aCanvas lines do: #update.
 	aCanvas signalUpdate.
 	aCanvas zoomToFit
+]
+
+{ #category : 'building' }
+MiServiceExtractorBuilder >> saveIncrement [
+	1halt.
+	(Smalltalk at: #allExtractions ifAbsentPut: [ OrderedCollection new ])
+		add: self mapModel extractions last -> solution.
+	
 ]
 
 { #category : 'building' }

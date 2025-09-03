@@ -55,6 +55,18 @@ ServiceExtractor >> attributesUsedBy: aMethod [
 ]
 
 { #category : 'accessing' }
+ServiceExtractor >> callGraph [
+
+	^ callGraph
+]
+
+{ #category : 'accessing' }
+ServiceExtractor >> callGraph: anObject [
+
+	callGraph := anObject
+]
+
+{ #category : 'accessing' }
 ServiceExtractor >> classes [
 
 	^ classes
