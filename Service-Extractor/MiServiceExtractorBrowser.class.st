@@ -42,7 +42,7 @@ MiServiceExtractorBrowser class >> windowSize [
 MiServiceExtractorBrowser >> buildDefaultExtractionMap [
 
 	| builder |
-	self model extractions ifEmpty: [ ^ self ].
+	self model services ifEmpty: [ ^ self ].
 
 	builder := MiServiceExtractorBuilder new
 		           mapModel: self model;
@@ -121,61 +121,14 @@ MiServiceExtractorBrowser >> buildDominatorTreeVisualization [
 { #category : 'actions' }
 MiServiceExtractorBrowser >> buildExtractionMap [
 
-	| methodsToExtract extraction builder solution list modal |
-	methodsToExtract := methodList selectedItems.
-	methodList selectItems: {  }.
-	methodList items: methodList items \ methodsToExtract.
-	extraction := ServiceExtractor new
-		              extractMethods: methodsToExtract;
-		              yourself.
-	list := SpFilteringListPresenter new
-		        items: (population sort: [ :a :b |
-					         a objectivesVector first < b objectivesVector first ]);
-		        display: [ :s |
-			        'Cohesion:' , s objectivesVector first asString
-			        , ' | Nb Calls: ' , s objectivesVector second asString
-			        , ' | dup: ' , (s genes count: [ :g | g = 2 ]) asString ];
-		        yourself.
-
-	modal := list asModalWindow.
-	modal title: 'Select a solution ('
-		, population anyOne candidateMethods size asString , ' methods)'.
-	modal okAction: [ solution := list selectedItem ].
-	modal open.
-
-	solution ifNil: [ ^ self ].
-	self model addExtraction: extraction -> solution.
-
+	| builder |
+	self selectSolution.
 
 	builder := MiServiceExtractorBuilder new
 		           mapModel: self model;
 		           container: canvas canvas;
 		           build;
-		           "extractionShapes := extractions
-		                    collect: [ :e | self shapeForExtraction: e ]
-		                    as: RSGroup.
-	(RSHorizontalLineLayout withGap: 40) on: extractionShapes.
-	
-	lb := RSLabel text:
-		      'Number of duplicated methods: ' .
-	canvas canvas add: lb.
-	canvas canvas addAll: extractionShapes.
-	dup := (canvas canvas allChildren
-		        select: [ :s |
-		        s model isMooseObject and: [ s model isMethod ] ]
-		        thenCollect: #model) groupedBy: [ :a | a ].
-	
-	RSVerticalLineLayout new alignLeft on: {
-			lb.
-			extractionShapes }.
-	(canvas canvas allChildren select: [ :s |
-		 s model isMooseObject and: [ s model isMethod ] ]) do: [ :s |
-		(dup at: s model) size > 1  ifTrue: [
-			s color: Color red ] ].
-	canvas canvas lines do: #update.
-	canvas canvas signalUpdate.
-	canvas canvas zoomToFit"
-			           yourself
+		           yourself
 ]
 
 { #category : 'testing' }
@@ -265,8 +218,35 @@ MiServiceExtractorBrowser >> run [
 
 	methodList items ifEmpty: [ ^ self ].
 	methodList selectedItems ifEmpty: [ ^ self ].
+	self model methodsToExtract: methodList selectedItems.
+	self model computeSolutions.
+	methodList selectItems: {  }.
+	methodList items: methodList items \ self model methodsToExtract.
 	self resetCanvas.
 	self buildExtractionMap
+]
+
+{ #category : 'actions' }
+MiServiceExtractorBrowser >> selectSolution [
+
+	| list modal solution |
+	list := SpFilteringListPresenter new
+		        items: (population sort: [ :a :b |
+					         a objectivesVector first < b objectivesVector first ]);
+		        display: [ :s |
+			        'Cohesion:' , s objectivesVector first asString
+			        , ' | Nb Calls: ' , s objectivesVector second asString
+			        , ' | dup: ' , (s genes count: [ :g | g = 2 ]) asString ];
+		        yourself.
+
+	modal := list asModalWindow.
+	modal title: 'Select a solution ('
+		, population anyOne candidateMethods size asString , ' methods)'.
+	modal okAction: [ solution := list selectedItem ].
+	modal open.
+
+	solution ifNil: [ ^ self ].
+	self model setServiceFromSolution: solution
 ]
 
 { #category : 'shapes' }

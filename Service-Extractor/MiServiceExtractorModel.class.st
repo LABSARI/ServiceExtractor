@@ -5,9 +5,11 @@ Class {
 		'methodList',
 		'extractionDictionary',
 		'elementIndex',
-		'methodToExtract',
 		'uccg',
-		'extractions'
+		'extractions',
+		'incrementalMigration',
+		'methodsToExtract',
+		'currentService'
 	],
 	#category : 'Service-Extractor-Browser',
 	#package : 'Service-Extractor',
@@ -32,10 +34,28 @@ MiServiceExtractorModel >> buildCallGraph [
 			        yourself ].
 ]
 
-{ #category : 'accessing' }
-MiServiceExtractorModel >> currentExtract [
+{ #category : 'as yet unclassified' }
+MiServiceExtractorModel >> computeSolutions [
 
-	^ self extractionDictionary at: self methodToExtract
+	incrementalMigration extract: methodList
+]
+
+{ #category : 'accessing' }
+MiServiceExtractorModel >> currentService [
+
+	^ currentService
+]
+
+{ #category : 'accessing' }
+MiServiceExtractorModel >> currentService: anObject [
+
+	currentService := anObject
+]
+
+{ #category : 'as yet unclassified' }
+MiServiceExtractorModel >> currentSolutions [
+
+	^ incrementalMigration currentSolutions
 ]
 
 { #category : 'accessing' }
@@ -91,6 +111,7 @@ MiServiceExtractorModel >> initialize [
 
 	super initialize.
 	extractions := OrderedCollection new.
+	incrementalMigration := IncrementalMigration current.
 	Smalltalk at: #allExtractions ifPresent: [ :e | extractions addAll: e ]
 ]
 
@@ -107,21 +128,44 @@ MiServiceExtractorModel >> methodList: anObject [
 ]
 
 { #category : 'accessing' }
-MiServiceExtractorModel >> methodToExtract [
+MiServiceExtractorModel >> methodsToExtract [
 
-	^ methodToExtract
+	^ methodsToExtract
 ]
 
 { #category : 'accessing' }
-MiServiceExtractorModel >> methodToExtract: aFamixJavaMethod [
+MiServiceExtractorModel >> methodsToExtract: anObject [
 
-	methodToExtract := aFamixJavaMethod
+	methodsToExtract := anObject
 ]
 
 { #category : 'accessing' }
 MiServiceExtractorModel >> miSelectedItem [
 
 	^ {  }
+]
+
+{ #category : 'building' }
+MiServiceExtractorModel >> saveIncrement [
+
+	incrementalMigration saveIncrementFromService: currentService
+]
+
+{ #category : 'accessing' }
+MiServiceExtractorModel >> services [
+
+	| s |
+	s := OrderedCollection withAll:
+		     (incrementalMigration increments collect: [ :increment |
+			      increment extractedService ]).
+	currentService ifNotNil: [ s add: currentService ].
+	^ s
+]
+
+{ #category : 'initialization' }
+MiServiceExtractorModel >> setServiceFromSolution: aSolution [
+
+	currentService := incrementalMigration serviceFromSolution: aSolution
 ]
 
 { #category : 'accessing' }

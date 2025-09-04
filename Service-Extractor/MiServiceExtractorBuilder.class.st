@@ -7,7 +7,9 @@ Class {
 		'domMethods',
 		'monolithNode',
 		'solution',
-		'validateButton'
+		'validateButton',
+		'incrementalMigration',
+		'remoteEntities'
 	],
 	#category : 'Service-Extractor-Browser',
 	#package : 'Service-Extractor',
@@ -17,12 +19,17 @@ Class {
 { #category : 'building' }
 MiServiceExtractorBuilder >> addMonolithChildrenFromSolution [
 
-	| solutions |
-	solutions := self mapModel extractions collect: [ :assoc |
-		             assoc value ].
-	solutions ifEmpty: [ ^ self ].
-	((solutions flatCollectAsSet: [ :s | s methodsInMonolith ])
-		 groupedBy: #parentType) associationsDo: [ :assoc |
+	| services monolithMethods |
+	services := mapModel services.
+
+	monolithMethods := (services flatCollectAsSet: [ :service |
+		                    service methodsInMonolith ])
+	                   \
+	                   (services flatCollectAsSet: [ :service |
+		                    service methodsToDelete ]).
+
+
+	(monolithMethods groupedBy: #parentType) associationsDo: [ :assoc |
 		monolithNode add: (HNode new
 				 rawModel: assoc key;
 				 name: assoc key name , ' ' , assoc value size asString , '/'
@@ -38,8 +45,9 @@ MiServiceExtractorBuilder >> build [
 
 	rootNode := HNode new.
 	rootNode layout: (RSHorizontalLineLayout new horizontalGap: 200).
-	self buildMonolith.
+	remoteEntities := Dictionary new.
 	self buildServices.
+	self buildMonolith.
 	self buildMenu.
 	
 	super build
@@ -82,8 +90,27 @@ MiServiceExtractorBuilder >> buildClassNodeFromAssoc: assoc from: anExtraction s
 ]
 
 { #category : 'building' }
+MiServiceExtractorBuilder >> buildClassNodesFrom: aService [
+
+	^ (aService allMethods groupedBy: [ :m | m parentType ]) associations
+		  collect: [ :assoc |
+			  | methods |
+			  methods := assoc value.
+			  HNode new
+				  rawModel: assoc key;
+				  name: assoc key name , ' ' , methods size asString , '/'
+					  , assoc key methods size asString;
+				  expand;
+				  addAll:
+					  (methods collect: [ :m |
+							   self buildNodeFromMethod: m from: aService ]);
+				  yourself ]
+]
+
+{ #category : 'building' }
 MiServiceExtractorBuilder >> buildMenu [
 
+	mapModel currentService ifNil: [ ^ self ].
 	validateButton := RSComposite new.
 	validateButton
 		add: (RSLabel new
@@ -107,7 +134,10 @@ MiServiceExtractorBuilder >> buildMenu [
 
 	validateButton setAsFixed.
 
-	validateButton when: RSMouseClick do: [ self saveIncrement ] for: self
+	validateButton
+		when: RSMouseClick
+		do: [ self saveIncrement ]
+		for: self
 ]
 
 { #category : 'building' }
@@ -221,13 +251,13 @@ MiServiceExtractorBuilder >> buildNodeFromMethod: method [
 ]
 
 { #category : 'building' }
-MiServiceExtractorBuilder >> buildNodeFromMethod: method from: anExtraction [
+MiServiceExtractorBuilder >> buildNodeFromMethod: method from: aService [
 
 	| node |
 	node := HNode new
 		        rawModel: method;
 		        name: method name , ': ', (uccg entryPointsUsing: method) size asString;
-		        color: (self colorForMethod: method in: anExtraction);
+		        color: (self colorForMethod: method in: aService);
 		        yourself.
 
 	^ node
@@ -253,11 +283,46 @@ MiServiceExtractorBuilder >> buildNodeFromMethod: method from: anExtraction solu
 ]
 
 { #category : 'building' }
+MiServiceExtractorBuilder >> buildNodeFromService: aService [
+
+	| node dict |
+	node := HNode new
+		        rawModel: aService;
+		        name: 'Extraction ';
+		        collapse;
+		        addAll: (self createLayersFrom: aService);
+		        style: (HBorderAndTitleStyle new
+				         borderWidth: 2;
+				         borderDashArray: #( 1 );
+				         yourself);
+		        color: ((Color fromHexString: 'DEDEDE') alpha: 0.2);
+		        layout: (RSHorizontalLineLayout new
+				         alignMiddle;
+				         horizontalGap: 100);
+		        yourself.
+	aService = mapModel currentService ifTrue: [ node expand ].
+	dict := Dictionary new.
+	(node allChildren select: [ :c |
+		 c rawModel isMooseObject and: [ c rawModel isMethod ] ]) do: [ :hn |
+		dict at: hn rawModel put: hn ].
+
+	dict keysDo: [ :m |
+		mapModel uccg callGraph at: m ifPresent: [ :c |
+			c do: [ :mm |
+				dict
+					at: mm
+					ifPresent: [ :hn | (dict at: m) dependencyTo: hn ]
+					ifAbsent: [ remoteEntities at: m put: (dict at: m) ] ] ] ].
+
+	^ node
+]
+
+{ #category : 'building' }
 MiServiceExtractorBuilder >> buildServices [
 
 	| nodes |
-	nodes := self mapModel extractions collect: [ :assoc  |
-		self buildNodeFromExtraction: assoc key solution: assoc value
+	nodes := self mapModel services collect: [ :service  |
+		self buildNodeFromService: service
 	].
 	rootNode addAll: nodes.
 ]
@@ -269,15 +334,15 @@ MiServiceExtractorBuilder >> colorForLayer: aSymbol [
 ]
 
 { #category : 'building' }
-MiServiceExtractorBuilder >> colorForMethod: method in: anExtraction [
+MiServiceExtractorBuilder >> colorForMethod: method in: aService [
 
-	(anExtraction methodsToExtract includes: method) ifTrue: [
+	(aService extractedMethods includes: method) ifTrue: [
 		^ Color fromHexString: '4FA7E2' ].
 
-	(domMethods includes: method) ifTrue: [
+	(aService dominatedMethods includes: method) ifTrue: [
 		^ Color fromHexString: '058B71' ].
 
-	(solution methodsDuplicated includes: method) ifTrue: [
+	(aService duplicatedMethods includes: method) ifTrue: [
 		^ Color orange ].
 	^ Color gray
 ]
@@ -297,12 +362,10 @@ MiServiceExtractorBuilder >> colorForMethod: method in: anExtraction solution: a
 ]
 
 { #category : 'building' }
-MiServiceExtractorBuilder >> createLayersFrom: anExtraction [
+MiServiceExtractorBuilder >> createLayersFrom: aService [
 
 	| classNodes groups groupNodes |
-	classNodes := (anExtraction classes associations reject: [ :a |
-		               a key isInterface ]) collect: [ :a |
-		              self buildClassNodeFromAssoc: a from: anExtraction ].
+	classNodes := self buildClassNodesFrom: aService.
 	classNodes := classNodes reject: [ :cn | cn children isEmpty ].
 	groups := classNodes groupedBy: [ :cn | self layerOf: cn ].
 	groupNodes := groups associations collect: [ :assoc |
@@ -548,9 +611,8 @@ MiServiceExtractorBuilder >> renderIn: aCanvas [
 
 { #category : 'building' }
 MiServiceExtractorBuilder >> saveIncrement [
-	1halt.
-	(Smalltalk at: #allExtractions ifAbsentPut: [ OrderedCollection new ])
-		add: self mapModel extractions last -> solution.
+		
+	mapModel saveIncrement
 	
 ]
 
